@@ -607,6 +607,23 @@ body.dropdown-open {
   background: var(--bg-tertiary);
 }
 
+.dropdown-show-more {
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dropdown-show-more:hover {
+  background: var(--bg-secondary);
+  color: var(--primary-dark);
+}
+
 .dropdown-footer {
   padding: 10px 14px;
   border-top: 1px solid var(--border);

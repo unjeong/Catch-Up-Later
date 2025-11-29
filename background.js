@@ -306,7 +306,7 @@ async function checkSingleSiteByIndex(index) {
     
     if (result.hasNewPosts && result.newPosts.length > 0) {
       siteState.newCount = result.newPosts.length;
-      siteState.newPosts = result.newPosts.slice(0, 30);
+      siteState.newPosts = result.newPosts.slice(0, 50);
     } else {
       siteState.newCount = 0;
       siteState.newPosts = [];
@@ -408,7 +408,7 @@ async function checkAllSites() {
         });
         
         siteState.newCount = result.newPosts.length;
-        siteState.newPosts = result.newPosts.slice(0, 30);
+        siteState.newPosts = result.newPosts.slice(0, 50);
       } else {
         siteState.newCount = 0;
         siteState.newPosts = [];

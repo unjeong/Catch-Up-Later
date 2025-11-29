@@ -865,53 +865,80 @@ async function showAllNewPostsDropdown() {
   closeDropdown();
   
   // 드롭다운 생성
+  const INITIAL_SHOW = 20;
+  let showingAll = false;
+  
   const dropdown = document.createElement('div');
   dropdown.className = 'new-posts-dropdown all-posts';
-  dropdown.innerHTML = `
-    <div class="dropdown-header">
-      <span>📋 All New Posts (${allNewPosts.length})</span>
-      <button class="dropdown-close">×</button>
-    </div>
-    <div class="dropdown-list">
-      ${allNewPosts.slice(0, 15).map(post => `
-        <a href="${post.link}" class="dropdown-item" target="_blank" data-site-index="${post.siteIndex}">
-          <span class="post-site">${escapeHtml(post.siteName)}</span>
-          <span class="post-title">${escapeHtml(post.title)}</span>
-          ${post.date ? `<span class="post-date">${post.date}</span>` : ''}
-        </a>
-      `).join('')}
-      ${allNewPosts.length > 15 ? `
-        <div class="dropdown-more">
-          ...and ${allNewPosts.length - 15} more
-        </div>
-      ` : ''}
-    </div>
-    <div class="dropdown-footer">
-      <button class="btn-mark-all-read">Mark All Read</button>
-    </div>
-  `;
+  
+  function renderDropdownContent(showAll = false) {
+    const postsToShow = showAll ? allNewPosts : allNewPosts.slice(0, INITIAL_SHOW);
+    const remaining = allNewPosts.length - INITIAL_SHOW;
+    
+    return `
+      <div class="dropdown-header">
+        <span>📋 All New Posts (${allNewPosts.length})</span>
+        <button class="dropdown-close">×</button>
+      </div>
+      <div class="dropdown-list">
+        ${postsToShow.map(post => `
+          <a href="${post.link}" class="dropdown-item" target="_blank" data-site-index="${post.siteIndex}">
+            <span class="post-site">${escapeHtml(post.siteName)}</span>
+            <span class="post-title">${escapeHtml(post.title)}</span>
+            ${post.date ? `<span class="post-date">${post.date}</span>` : ''}
+          </a>
+        `).join('')}
+        ${!showAll && remaining > 0 ? `
+          <button class="dropdown-show-more">
+            Show ${remaining} more posts
+          </button>
+        ` : ''}
+      </div>
+      <div class="dropdown-footer">
+        <button class="btn-mark-all-read">Mark All Read</button>
+      </div>
+    `;
+  }
+  
+  dropdown.innerHTML = renderDropdownContent(false);
   
   // body에 추가
   document.body.appendChild(dropdown);
   currentDropdown = dropdown;
   document.body.classList.add('dropdown-open');
   
-  // 닫기 버튼
-  dropdown.querySelector('.dropdown-close').addEventListener('click', closeDropdown);
-  
-  // 모두 읽음 처리 버튼
-  dropdown.querySelector('.btn-mark-all-read').addEventListener('click', async () => {
-    await markAllSitesAsRead();
-    closeDropdown();
-  });
-  
-  // 링크 클릭 시 해당 사이트 읽음 처리
-  dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-    item.addEventListener('click', async () => {
-      const siteIndex = parseInt(item.dataset.siteIndex);
-      await markSiteAsRead(siteIndex);
+  function setupDropdownListeners() {
+    // 닫기 버튼
+    dropdown.querySelector('.dropdown-close').addEventListener('click', closeDropdown);
+    
+    // 모두 읽음 처리 버튼
+    dropdown.querySelector('.btn-mark-all-read').addEventListener('click', async () => {
+      await markAllSitesAsRead();
+      closeDropdown();
     });
-  });
+    
+    // 링크 클릭 시 해당 사이트 읽음 처리
+    dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+      item.addEventListener('click', async () => {
+        const siteIndex = parseInt(item.dataset.siteIndex);
+        await markSiteAsRead(siteIndex);
+      });
+    });
+    
+    // 더 보기 버튼
+    const showMoreBtn = dropdown.querySelector('.dropdown-show-more');
+    if (showMoreBtn) {
+      showMoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        showingAll = true;
+        dropdown.innerHTML = renderDropdownContent(true);
+        setupDropdownListeners();
+      });
+    }
+  }
+  
+  setupDropdownListeners();
   
   // 외부 클릭 시 닫기
   setTimeout(() => {
@@ -952,30 +979,42 @@ async function showNewPostsDropdown(index, badgeElement) {
   }
   
   // 드롭다운 생성
+  const INITIAL_SHOW = 15;
+  const newPosts = state.newPosts;
+  let showingAllPosts = false;
+  
   const dropdown = document.createElement('div');
   dropdown.className = 'new-posts-dropdown';
-  dropdown.innerHTML = `
-    <div class="dropdown-header">
-      <span>📋 New Posts (${state.newPosts.length})</span>
-      <button class="dropdown-close">×</button>
-    </div>
-    <div class="dropdown-list">
-      ${state.newPosts.slice(0, 10).map(post => `
-        <a href="${post.link}" class="dropdown-item" target="_blank">
-          <span class="post-title">${escapeHtml(post.title)}</span>
-          ${post.date ? `<span class="post-date">${post.date}</span>` : ''}
-        </a>
-      `).join('')}
-      ${state.newPosts.length > 10 ? `
-        <div class="dropdown-more">
-          ...and ${state.newPosts.length - 10} more
-        </div>
-      ` : ''}
-    </div>
-    <div class="dropdown-footer">
-      <button class="btn-mark-read" data-index="${index}">Mark Read</button>
-    </div>
-  `;
+  
+  function renderSiteDropdownContent(showAll = false) {
+    const postsToShow = showAll ? newPosts : newPosts.slice(0, INITIAL_SHOW);
+    const remaining = newPosts.length - INITIAL_SHOW;
+    
+    return `
+      <div class="dropdown-header">
+        <span>📋 New Posts (${newPosts.length})</span>
+        <button class="dropdown-close">×</button>
+      </div>
+      <div class="dropdown-list">
+        ${postsToShow.map(post => `
+          <a href="${post.link}" class="dropdown-item" target="_blank">
+            <span class="post-title">${escapeHtml(post.title)}</span>
+            ${post.date ? `<span class="post-date">${post.date}</span>` : ''}
+          </a>
+        `).join('')}
+        ${!showAll && remaining > 0 ? `
+          <button class="dropdown-show-more">
+            Show ${remaining} more posts
+          </button>
+        ` : ''}
+      </div>
+      <div class="dropdown-footer">
+        <button class="btn-mark-read" data-index="${index}">Mark Read</button>
+      </div>
+    `;
+  }
+  
+  dropdown.innerHTML = renderSiteDropdownContent(false);
   
   // body에 추가 (팝업 밖으로 안 잘리게)
   document.body.appendChild(dropdown);
@@ -990,22 +1029,38 @@ async function showNewPostsDropdown(index, badgeElement) {
   dropdown.style.right = 'auto';
   dropdown.style.bottom = 'auto';
   
-  // 닫기 버튼
-  dropdown.querySelector('.dropdown-close').addEventListener('click', closeDropdown);
-  
-  // 읽음 처리 버튼
-  dropdown.querySelector('.btn-mark-read').addEventListener('click', async () => {
-    await markSiteAsRead(index);
-    closeDropdown();
-  });
-  
-  // 링크 클릭 시 읽음 처리
-  dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-    item.addEventListener('click', async () => {
+  function setupSiteDropdownListeners() {
+    // 닫기 버튼
+    dropdown.querySelector('.dropdown-close').addEventListener('click', closeDropdown);
+    
+    // 읽음 처리 버튼
+    dropdown.querySelector('.btn-mark-read').addEventListener('click', async () => {
       await markSiteAsRead(index);
       closeDropdown();
     });
-  });
+    
+    // 링크 클릭 시 읽음 처리
+    dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+      item.addEventListener('click', async () => {
+        await markSiteAsRead(index);
+        closeDropdown();
+      });
+    });
+    
+    // 더 보기 버튼
+    const showMoreBtn = dropdown.querySelector('.dropdown-show-more');
+    if (showMoreBtn) {
+      showMoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        showingAllPosts = true;
+        dropdown.innerHTML = renderSiteDropdownContent(true);
+        setupSiteDropdownListeners();
+      });
+    }
+  }
+  
+  setupSiteDropdownListeners();
   
   // 외부 클릭 시 닫기
   setTimeout(() => {
