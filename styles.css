@@ -61,6 +61,11 @@ body.dropdown-open {
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* ===== 메인 헤더 ===== */
 .main-header {
   display: flex;
@@ -453,6 +458,37 @@ body.dropdown-open {
   background: var(--warning);
 }
 
+/* 체크 완료 뱃지 (플랫폼, RSS 공통) */
+.check-badge {
+  display: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--success);
+  color: white;
+  border-radius: 9px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+}
+
+.check-badge.show {
+  display: flex;
+}
+
+.check-badge.done {
+  background: var(--success);
+  animation: checkPop 0.3s ease;
+}
+
+@keyframes checkPop {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
 .site-chip-delete {
   display: none;
   position: absolute;
@@ -475,6 +511,60 @@ body.dropdown-open {
 }
 
 .site-chip-delete:hover {
+  background: var(--danger);
+}
+
+/* 플랫폼 칩 삭제 버튼 */
+.platform-chip-delete {
+  display: none;
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: var(--text-muted);
+  color: white;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.platform-chip:hover .platform-chip-delete {
+  display: flex;
+}
+
+.platform-chip-delete:hover {
+  background: var(--danger);
+}
+
+/* RSS 칩 삭제 버튼 */
+.rss-chip-delete {
+  display: none;
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: var(--text-muted);
+  color: white;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.rss-chip:hover .rss-chip-delete {
+  display: flex;
+}
+
+.rss-chip-delete:hover {
   background: var(--danger);
 }
 
@@ -935,6 +1025,62 @@ body.dropdown-open {
   font-weight: 600;
 }
 
+/* ===== 제한 카운터 ===== */
+.limit-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+.limit-counter.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.limit-counter.limit-reached {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* 추가 버튼 비활성화 상태 */
+.btn-add-site.disabled,
+.btn-add-rss.disabled,
+#addCurrentPage:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 제한 도달 안내 메시지 */
+.limit-message {
+  display: none;
+  padding: 8px 12px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 0.75rem;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.limit-message.show {
+  display: block;
+}
+
+.limit-message.error {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
 /* ===== 푸터 ===== */
 footer {
   margin-top: 16px;
@@ -1090,4 +1236,791 @@ footer p {
   z-index: 99999;
   animation: toastIn 0.3s ease;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Connected Platforms */
+.platforms-section h2 {
+  display: flex;
+  align-items: center;
+}
+
+.platforms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.platform-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.platform-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.platform-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.platform-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.platform-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.platform-status {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.platform-status.connected {
+  color: var(--success);
+}
+
+.btn-connect {
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-connect:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-connect.connected {
+  background: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+
+.btn-connect.connected:hover {
+  background: #059669;
+  border-color: #059669;
+}
+
+/* ===== 메인 뷰 연결된 플랫폼 ===== */
+.platforms-main-section {
+  margin-top: 0;
+}
+
+.platforms-main-section h2 {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.connected-platforms-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 플랫폼 칩 - 사이트 칩과 동일한 스타일 */
+.connected-platforms-grid .platform-chip {
+  flex: unset;
+  min-width: unset;
+}
+
+.platform-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.platform-chip:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.platform-chip.checking {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.platform-chip svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.platform-chip-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.platform-chip-badge {
+  display: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--danger);
+  color: white;
+  border-radius: 9px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  align-items: center;
+  justify-content: center;
+}
+
+.platform-chip-badge.show,
+.platform-chip.has-updates .platform-chip-badge {
+  display: flex;
+}
+
+.platform-chip.has-updates {
+  border-color: var(--border);
+  background: var(--bg-primary);
+}
+
+/* Site limit indicator */
+.site-limit-indicator {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.site-limit-indicator.warning {
+  color: var(--warning);
+}
+
+.site-limit-indicator.limit-reached {
+  color: var(--danger);
+}
+
+
+/* 플랫폼 아이템 스타일 - 사이트와 동일 */
+
+/* 플랫폼 뱃지 클릭 가능 스타일 */
+.platform-chip-badge.clickable {
+  cursor: pointer;
+}
+
+.platform-chip-badge.clickable:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+/* ===== RSS Feeds Section ===== */
+
+.rss-section h2 {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-add-rss {
+  position: absolute;
+  right: 0;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+  border-radius: 50%;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.btn-add-rss:hover {
+  background: var(--primary);
+  color: white;
+  transform: scale(1.1);
+}
+
+.rss-feed-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rss-empty {
+  width: 100%;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 16px;
+}
+
+.rss-empty-add {
+  width: 100%;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rss-empty-add:hover {
+  background: #fff7ed;
+  border-color: #f97316;
+  color: #f97316;
+}
+
+/* RSS Feed Chip - Same style as site chip */
+.rss-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.rss-chip:hover {
+  background: var(--bg-tertiary);
+  border-color: #f97316;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.rss-chip.checking {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.rss-chip-icon {
+  width: 16px;
+  height: 16px;
+  color: #f97316;
+  flex-shrink: 0;
+}
+
+.rss-chip-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rss-chip-badge {
+  display: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #f97316;
+  color: white;
+  border-radius: 9px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  align-items: center;
+  justify-content: center;
+}
+
+.rss-chip-badge.show {
+  display: flex;
+}
+
+.rss-chip-delete {
+  display: none;
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: var(--text-muted);
+  color: white;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+
+.rss-chip:hover .rss-chip-delete {
+  display: flex;
+}
+
+.rss-chip-delete:hover {
+  background: var(--danger);
+}
+
+/* ===== RSS Modal ===== */
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.modal-content {
+  position: relative;
+  width: 340px;
+  max-height: 90%;
+  background: var(--bg-primary);
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  animation: modalIn 0.2s ease;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: white;
+}
+
+.modal-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.modal-close:hover {
+  opacity: 1;
+}
+
+.modal-body {
+  padding: 20px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.rss-input-group {
+  margin-bottom: 16px;
+}
+
+.rss-input-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.rss-input-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transition: border-color 0.2s;
+}
+
+.rss-input-group input:focus {
+  outline: none;
+  border-color: #f97316;
+}
+
+.btn-auto-detect {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-auto-detect:hover {
+  background: #f97316;
+  border-color: #f97316;
+  color: white;
+}
+
+.rss-message {
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+  display: none;
+}
+
+.rss-message.show {
+  display: block;
+}
+
+.rss-message.success {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.rss-message.error {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.popular-feeds label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.popular-feeds-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.popular-feed-btn {
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.popular-feed-btn:hover {
+  background: #f97316;
+  border-color: #f97316;
+  color: white;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.modal-footer .btn {
+  flex: 1;
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+/* RSS Feed in Settings */
+.rss-manage-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.rss-manage-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rss-manage-icon {
+  width: 20px;
+  height: 20px;
+  color: #f97316;
+  flex-shrink: 0;
+}
+
+.rss-manage-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.rss-manage-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rss-manage-url {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rss-manage-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ===== Toggle Detail Content (Settings) ===== */
+.toggle-detail-content {
+  padding: 12px;
+  margin-top: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toggle-detail-content .hint {
+  margin-bottom: 12px;
+  font-size: 0.75rem;
+}
+
+.toggle-detail-content .platforms-list {
+  background: transparent;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.toggle-detail-content .platform-item {
+  background: var(--bg-primary);
+  margin-bottom: 6px;
+  padding: 10px 12px;
+}
+
+.toggle-detail-content .platform-item:last-child {
+  margin-bottom: 0;
+}
+
+/* RSS Inline Form in Settings */
+.rss-inline-form {
+  background: var(--bg-primary);
+  padding: 14px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+
+.rss-inline-form .rss-input-group {
+  margin-bottom: 12px;
+}
+
+.rss-inline-form .rss-input-group:last-of-type {
+  margin-bottom: 8px;
+}
+
+.rss-inline-form label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.rss-inline-form input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.rss-inline-form input:focus {
+  border-color: var(--primary);
+}
+
+.rss-url-row {
+  display: flex;
+  gap: 8px;
+}
+
+.rss-url-row input {
+  flex: 1;
+}
+
+.btn-auto-detect-small {
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.btn-auto-detect-small:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+.rss-inline-form .btn {
+  margin-top: 8px;
+}
+
+/* Popular Feeds Inline */
+.popular-feeds-inline {
+  margin-bottom: 16px;
+}
+
+.popular-feeds-inline label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* Registered Feeds Section */
+.registered-feeds-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.registered-feeds-section label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-list-manage.compact {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.site-list-manage.compact li {
+  padding: 10px;
+  margin-bottom: 4px;
+}
+
+/* RSS Message in Settings */
+.toggle-detail-content .rss-message {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.toggle-detail-content .rss-message.show {
+  display: block;
+}
+
+.toggle-detail-content .rss-message.info {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.toggle-detail-content .rss-message.success {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.toggle-detail-content .rss-message.error {
+  background: var(--danger-light);
+  color: var(--danger);
 }

@@ -1,5 +1,16 @@
 // Catch Up Later - Background Service Worker
 
+// 플랫폼 모듈 로드
+importScripts('platforms/gmail.js');
+importScripts('platforms/youtube.js');
+importScripts('platforms/github.js');
+importScripts('platforms/reddit.js');
+importScripts('platforms/discord.js');
+
+// RSS 모듈 로드
+importScripts('rss/rss-parser.js');
+importScripts('rss/rss-manager.js');
+
 // ===== Storage 상수 =====
 const SYNC_QUOTA_BYTES = 102400; // 100KB
 const SYNC_WARNING_THRESHOLD = 0.8; // 80%에서 경고
@@ -154,8 +165,155 @@ async function handleMessage(message) {
       }
       return { active: false };
     
+    // ===== Gmail 관련 =====
+    case 'getGmailStatus':
+      return await self.GmailManager.getGmailStatus();
+    
+    case 'connectGmail':
+      return await self.GmailManager.connectGmail();
+    
+    case 'disconnectGmail':
+      return await self.GmailManager.disconnectGmail();
+    
+    case 'checkGmailEmails':
+      return await self.GmailManager.checkNewEmails();
+    
+    case 'getUnreadEmails':
+      return await self.GmailManager.getUnreadEmails(message.query);
+    
+    case 'markGmailAsSeen':
+      console.log('[Background] markGmailAsSeen called');
+      const gmailResult = await self.GmailManager.markEmailsAsSeen();
+      console.log('[Background] markGmailAsSeen result:', gmailResult);
+      
+      // 성공 시 platformsStatus도 초기화
+      if (gmailResult.success) {
+        const { platformsStatus: pStatus = {} } = await chrome.storage.local.get('platformsStatus');
+        pStatus.gmail = {
+          ...pStatus.gmail,
+          count: 0,
+          items: []
+        };
+        await chrome.storage.local.set({ platformsStatus: pStatus });
+        await updateBadgeFromStorage();
+      }
+      
+      return gmailResult;
+    
+    // ===== YouTube 관련 =====
+    case 'getYouTubeStatus':
+      return await self.YouTubeManager.getYouTubeStatus();
+    
+    case 'connectYouTube':
+      return await self.YouTubeManager.connectYouTube();
+    
+    case 'disconnectYouTube':
+      return await self.YouTubeManager.disconnectYouTube();
+    
+    case 'checkYouTubeVideos':
+      return await self.YouTubeManager.checkNewVideos();
+    
+    case 'getSubscriptionVideos':
+      return await self.YouTubeManager.getSubscriptionVideos(message.maxResults);
+    
+    case 'getYouTubeSubscriptions':
+      return await self.YouTubeManager.getSubscriptions(message.maxResults);
+    
+    // ===== GitHub 관련 =====
+    case 'getGitHubStatus':
+      return await self.GitHubManager.getGitHubStatus();
+    
+    case 'connectGitHub':
+      return await self.GitHubManager.connectGitHub(message.token);
+    
+    case 'disconnectGitHub':
+      return await self.GitHubManager.disconnectGitHub();
+    
+    case 'checkGitHubNotifications':
+      return await self.GitHubManager.checkNewNotifications();
+    
+    case 'markGitHubAsSeen':
+      return await self.GitHubManager.markNotificationsAsSeen();
+    
+    case 'markGitHubAllRead':
+      return await self.GitHubManager.markAllAsRead();
+    
+    // ===== Reddit 관련 =====
+    case 'getRedditStatus':
+      return await self.RedditManager.getRedditStatus();
+    
+    case 'connectReddit':
+      return await self.RedditManager.connectReddit(message.credentials);
+    
+    case 'disconnectReddit':
+      return await self.RedditManager.disconnectReddit();
+    
+    case 'checkRedditNotifications':
+      return await self.RedditManager.checkNewNotifications();
+    
+    case 'markRedditAsSeen':
+      return await self.RedditManager.markNotificationsAsSeen();
+    
+    // ===== Discord 관련 =====
+    case 'getDiscordStatus':
+      return await self.DiscordManager.getDiscordStatus();
+    
+    case 'connectDiscord':
+      return await self.DiscordManager.connectDiscord(message.token);
+    
+    case 'disconnectDiscord':
+      return await self.DiscordManager.disconnectDiscord();
+    
+    case 'checkDiscordNotifications':
+      return await self.DiscordManager.checkNewNotifications();
+    
+    case 'markDiscordAsSeen':
+      return await self.DiscordManager.markNotificationsAsSeen();
+    
+    // ===== 플랫폼 통합 체크 =====
+    case 'checkAllPlatforms':
+      return await checkAllPlatforms();
+    
+    case 'getPlatformsStatus':
+      const { platformsStatus: pStatus = {} } = await chrome.storage.local.get('platformsStatus');
+      return pStatus;
+    
+    case 'markPlatformAsRead':
+      return await markPlatformAsRead(message.platform);
+    
+    // ===== RSS 관련 =====
+    case 'getRSSFeeds':
+      return { feeds: await self.RSSManager.getFeeds() };
+    
+    case 'getRSSFeedsWithState':
+      return { feeds: await self.RSSManager.getFeedsWithState() };
+    
+    case 'addRSSFeed':
+      return await self.RSSManager.addFeed(message.feedUrl, message.feedName);
+    
+    case 'removeRSSFeed':
+      return await self.RSSManager.removeFeed(message.feedId);
+    
+    case 'checkRSSFeed':
+      return await self.RSSManager.checkFeed(message.feedId);
+    
+    case 'checkAllRSSFeeds':
+      return await self.RSSManager.checkAllFeeds();
+    
+    case 'markRSSFeedAsRead':
+      return await self.RSSManager.markFeedAsRead(message.feedId);
+    
+    case 'markAllRSSFeedsAsRead':
+      return await self.RSSManager.markAllFeedsAsRead();
+    
+    case 'autoDetectRSSFeed':
+      return await self.RSSManager.autoDetect(message.pageUrl);
+    
+    case 'getRSSStatus':
+      return await self.RSSManager.getRSSStatus();
+    
     default:
-      return { success: false, error: '알 수 없는 액션' };
+      return { success: false, error: 'Unknown action' };
   }
 }
 
@@ -209,7 +367,7 @@ async function registerSiteWithSelector(url, selector) {
   
   // 중복 체크
   if (sites.some(site => site.url === url)) {
-    return { success: false, error: '이미 등록된 사이트입니다' };
+    return { success: false, error: 'Site already registered' };
   }
   
   const newSite = {
@@ -258,8 +416,8 @@ async function registerSiteWithSelector(url, selector) {
     }
     
     return result;
-    
-  } catch (error) {
+      
+    } catch (error) {
     if (error.message.includes('QUOTA_BYTES')) {
       return {
         success: false,
@@ -307,7 +465,7 @@ async function checkSingleSiteByIndex(index) {
     if (result.hasNewPosts && result.newPosts.length > 0) {
       siteState.newCount = result.newPosts.length;
       siteState.newPosts = result.newPosts.slice(0, 50);
-    } else {
+  } else {
       siteState.newCount = 0;
       siteState.newPosts = [];
     }
@@ -338,16 +496,41 @@ async function checkSingleSiteByIndex(index) {
   }
 }
 
-// 스토리지에서 총 새 글 수 계산하여 뱃지 업데이트
+// 스토리지에서 총 새 글 수 계산하여 뱃지 업데이트 (사이트 + 플랫폼 + RSS)
 async function updateBadgeFromStorage() {
   const { siteStates = {} } = await chrome.storage.local.get('siteStates');
+  const { platformsStatus = {} } = await chrome.storage.local.get('platformsStatus');
+  const { rss_feed_states = {} } = await chrome.storage.local.get('rss_feed_states');
+  
+  // 토글 상태 확인
+  const { enablePlatforms = true, enableRSSFeeds = true } = await chrome.storage.sync.get(['enablePlatforms', 'enableRSSFeeds']);
   
   let total = 0;
+  
+  // 사이트 새 글 수 (항상 포함)
   Object.values(siteStates).forEach(state => {
     if (state.newCount > 0) {
       total += state.newCount;
     }
   });
+  
+  // 플랫폼 새 알림 수 (토글이 활성화된 경우에만)
+  if (enablePlatforms) {
+    Object.values(platformsStatus).forEach(platform => {
+      if (platform.count > 0) {
+        total += platform.count;
+      }
+    });
+  }
+  
+  // RSS 새 글 수 (토글이 활성화된 경우에만)
+  if (enableRSSFeeds) {
+    Object.values(rss_feed_states).forEach(state => {
+      if (state.newCount > 0) {
+        total += state.newCount;
+      }
+    });
+  }
   
   await updateBadge(total);
   
@@ -369,13 +552,10 @@ async function checkAllSites() {
   const { sites = [] } = await chrome.storage.sync.get('sites');
   const { siteStates = {} } = await chrome.storage.local.get('siteStates');
   
-  if (sites.length === 0) {
-    return { success: false, error: '등록된 사이트가 없습니다' };
-  }
-  
   let totalNewCount = 0;
   const allNewPosts = [];
   
+  // 웹사이트 체크
   for (const site of sites) {
     const siteState = siteStates[site.url] || {};
     
@@ -402,14 +582,14 @@ async function checkAllSites() {
         result.newPosts.forEach(post => {
           allNewPosts.push({
             ...post,
-            hostname: new URL(site.url).hostname,
+          hostname: new URL(site.url).hostname,
             siteUrl: site.url
           });
         });
         
         siteState.newCount = result.newPosts.length;
         siteState.newPosts = result.newPosts.slice(0, 50);
-      } else {
+    } else {
         siteState.newCount = 0;
         siteState.newPosts = [];
       }
@@ -443,7 +623,58 @@ async function checkAllSites() {
   // 사이트 상태 저장 (local)
   await chrome.storage.local.set({ siteStates });
   
-  // 뱃지 업데이트 (siteStates의 newCount 합계로 통일)
+  // 토글 상태 확인
+  const { enablePlatforms = true, enableRSSFeeds = true } = await chrome.storage.sync.get(['enablePlatforms', 'enableRSSFeeds']);
+  
+  // ===== 플랫폼 체크 (토글이 활성화된 경우만) =====
+  let platformResults = {
+    gmail: { count: 0, items: [] },
+    youtube: { count: 0, items: [] },
+    github: { count: 0, items: [] },
+    reddit: { count: 0, items: [] },
+    discord: { count: 0, items: [] },
+    totalCount: 0
+  };
+  
+  if (enablePlatforms) {
+    platformResults = await checkAllPlatforms();
+    totalNewCount += platformResults.totalCount;
+    
+    // 플랫폼 알림 추가
+    if (platformResults.gmail.count > 0) {
+      allNewPosts.unshift({
+        title: `📧 ${platformResults.gmail.count} new emails`,
+        link: 'https://mail.google.com',
+        platform: 'gmail'
+      });
+    }
+    if (platformResults.youtube.count > 0) {
+      allNewPosts.unshift({
+        title: `🎬 ${platformResults.youtube.count} new videos`,
+        link: 'https://youtube.com/feed/subscriptions',
+        platform: 'youtube'
+      });
+    }
+  }
+  
+  // ===== RSS 피드 체크 (토글이 활성화된 경우만) =====
+  let rssResults = { totalCount: 0, results: {} };
+  
+  if (enableRSSFeeds) {
+    rssResults = await self.RSSManager.checkAllFeeds();
+    totalNewCount += rssResults.totalCount;
+    
+    // RSS 알림 추가
+    if (rssResults.totalCount > 0) {
+      allNewPosts.unshift({
+        title: `📡 ${rssResults.totalCount} new RSS items`,
+        link: '',
+        platform: 'rss'
+      });
+    }
+  }
+  
+  // 뱃지 업데이트 (사이트 + 플랫폼 + RSS 합계)
   await updateBadgeFromStorage();
   
   // 새 글이 있으면 알림
@@ -454,7 +685,120 @@ async function checkAllSites() {
     }
   }
   
-  return { success: true, newCount: totalNewCount };
+  return { success: true, newCount: totalNewCount, platforms: platformResults, rss: rssResults };
+}
+
+// 모든 플랫폼 체크
+async function checkAllPlatforms() {
+  const results = {
+    gmail: { count: 0, items: [] },
+    youtube: { count: 0, items: [] },
+    github: { count: 0, items: [] },
+    reddit: { count: 0, items: [] },
+    discord: { count: 0, items: [] },
+    totalCount: 0
+  };
+  
+  // Gmail 체크
+  try {
+    const gmailStatus = await self.GmailManager.getGmailStatus();
+    if (gmailStatus.connected) {
+      const gmailResult = await self.GmailManager.checkNewEmails();
+      results.gmail.count = gmailResult.count || 0;
+      results.gmail.items = gmailResult.emails || [];
+      results.totalCount += results.gmail.count;
+      await updatePlatformState('gmail', results.gmail.count, results.gmail.items);
+    }
+  } catch (error) {
+    console.error('Gmail check failed:', error);
+  }
+  
+  // YouTube 체크
+  try {
+    const youtubeStatus = await self.YouTubeManager.getYouTubeStatus();
+    if (youtubeStatus.connected) {
+      const youtubeResult = await self.YouTubeManager.checkNewVideos();
+      results.youtube.count = youtubeResult.count || 0;
+      results.youtube.items = youtubeResult.videos || [];
+      results.totalCount += results.youtube.count;
+      await updatePlatformState('youtube', results.youtube.count, results.youtube.items);
+    }
+  } catch (error) {
+    console.error('YouTube check failed:', error);
+  }
+  
+  // GitHub 체크
+  try {
+    const githubStatus = await self.GitHubManager.getGitHubStatus();
+    if (githubStatus.connected) {
+      const githubResult = await self.GitHubManager.checkNewNotifications();
+      results.github.count = githubResult.count || 0;
+      results.github.items = githubResult.notifications || [];
+      results.totalCount += results.github.count;
+      await updatePlatformState('github', results.github.count, results.github.items);
+    }
+  } catch (error) {
+    console.error('GitHub check failed:', error);
+  }
+  
+  // Reddit 체크
+  try {
+    const redditStatus = await self.RedditManager.getRedditStatus();
+    if (redditStatus.connected) {
+      const redditResult = await self.RedditManager.checkNewNotifications();
+      results.reddit.count = redditResult.count || 0;
+      results.reddit.items = redditResult.items || [];
+      results.totalCount += results.reddit.count;
+      await updatePlatformState('reddit', results.reddit.count, results.reddit.items);
+    }
+  } catch (error) {
+    console.error('Reddit check failed:', error);
+  }
+  
+  // Discord 체크
+  try {
+    const discordStatus = await self.DiscordManager.getDiscordStatus();
+    if (discordStatus.connected) {
+      const discordResult = await self.DiscordManager.checkNewNotifications();
+      results.discord.count = discordResult.count || 0;
+      results.discord.items = discordResult.items || [];
+      results.totalCount += results.discord.count;
+      await updatePlatformState('discord', results.discord.count, results.discord.items);
+    }
+  } catch (error) {
+    console.error('Discord check failed:', error);
+  }
+  
+  return results;
+}
+
+// 플랫폼 상태 저장
+async function updatePlatformState(platform, count, items) {
+  const { platformsStatus = {} } = await chrome.storage.local.get('platformsStatus');
+  
+  platformsStatus[platform] = {
+    ...platformsStatus[platform],
+    connected: true,
+    count: count,
+    items: items.slice(0, 20),
+    lastCheck: new Date().toISOString()
+  };
+  
+  await chrome.storage.local.set({ platformsStatus });
+}
+
+// 플랫폼 읽음 처리
+async function markPlatformAsRead(platform) {
+  const { platformsStatus = {} } = await chrome.storage.local.get('platformsStatus');
+  
+  if (platformsStatus[platform]) {
+    platformsStatus[platform].count = 0;
+    platformsStatus[platform].items = [];
+    await chrome.storage.local.set({ platformsStatus });
+  }
+  
+  await updateBadgeFromStorage();
+  return { success: true };
 }
 
 // Offscreen document 생성/확인
@@ -490,6 +834,56 @@ async function ensureOffscreenDocument() {
   creatingOffscreen = null;
 }
 
+// 응답 인코딩 감지 및 디코딩
+async function decodeResponse(response) {
+  // Content-Type 헤더에서 charset 확인
+  const contentType = response.headers.get('Content-Type') || '';
+  let charset = 'utf-8';
+  
+  // Content-Type에서 charset 추출
+  const charsetMatch = contentType.match(/charset=([^;]+)/i);
+  if (charsetMatch) {
+    charset = charsetMatch[1].trim().toLowerCase();
+  }
+  
+  // ArrayBuffer로 응답 받기
+  const buffer = await response.arrayBuffer();
+  
+  // charset이 명시되지 않은 경우 HTML에서 meta 태그 확인
+  if (charset === 'utf-8') {
+    // 먼저 UTF-8로 부분 디코딩하여 meta charset 확인
+    const partialText = new TextDecoder('utf-8', { fatal: false }).decode(buffer.slice(0, 2048));
+    
+    // <meta charset="..."> 또는 <meta http-equiv="Content-Type" content="...; charset=...">
+    const metaCharsetMatch = partialText.match(/<meta[^>]+charset=["']?([^"'\s>]+)/i);
+    if (metaCharsetMatch) {
+      charset = metaCharsetMatch[1].toLowerCase();
+    }
+  }
+  
+  // 한국 사이트용 인코딩 매핑
+  const encodingMap = {
+    'euc-kr': 'euc-kr',
+    'euckr': 'euc-kr',
+    'ks_c_5601-1987': 'euc-kr',
+    'korean': 'euc-kr',
+    'iso-8859-1': 'iso-8859-1',
+    'windows-1252': 'windows-1252',
+    'utf-8': 'utf-8',
+    'utf8': 'utf-8'
+  };
+  
+  const finalCharset = encodingMap[charset] || 'utf-8';
+  
+  try {
+    const decoder = new TextDecoder(finalCharset);
+    return decoder.decode(buffer);
+  } catch (e) {
+    console.warn(`Failed to decode with ${finalCharset}, falling back to UTF-8`);
+    return new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+  }
+}
+
 // 개별 사이트 체크 (fetch 방식 - 탭 열지 않음)
 async function checkSite(site, siteState) {
   if (!site.selector) {
@@ -510,7 +904,8 @@ async function checkSite(site, siteState) {
       throw new Error(`HTTP ${response.status}`);
     }
     
-    const html = await response.text();
+    // 인코딩 감지 및 디코딩
+    const html = await decodeResponse(response);
     
     // Offscreen document에서 HTML 파싱
     await ensureOffscreenDocument();
@@ -526,7 +921,11 @@ async function checkSite(site, siteState) {
       return { needsLogin: true, currentCount: 0, hash: '', hasNewPosts: false, newPosts: [] };
     }
     
-    if (error) throw new Error(error);
+    // 요소를 찾지 못하면 탭 방식으로 폴백 (SPA/JS 렌더링 사이트)
+    if (error || posts.length === 0) {
+      console.log(`Fetch parsing failed for ${site.url}, falling back to tab method`);
+      return await checkSiteWithTab(site, siteState);
+    }
     
     const currentHash = await hashPosts(posts);
     const currentCount = posts.length;
@@ -540,7 +939,7 @@ async function checkSite(site, siteState) {
       if (siteState.lastPosts) {
         const oldLinks = new Set(siteState.lastPosts.map(p => p.link));
         newPosts = posts.filter(p => !oldLinks.has(p.link));
-      } else {
+  } else {
         const newCount = Math.max(0, currentCount - (siteState.lastCount || 0));
         newPosts = posts.slice(0, newCount);
       }

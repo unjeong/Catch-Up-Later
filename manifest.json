@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Catch Up Later",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Monitor websites for new posts. Get notified without constantly checking.",
   "permissions": [
     "storage",
@@ -9,11 +9,20 @@
     "activeTab",
     "scripting",
     "notifications",
-    "offscreen"
+    "offscreen",
+    "identity"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
+  "oauth2": {
+    "client_id": "567892047332-qnm4cqgb78l36e6ftbi0ts7rj4r9dkpv.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/youtube.readonly"
+    ]
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
