@@ -28,8 +28,9 @@ const elements = {
   siteGrid: document.getElementById('siteGrid'),
   
   // 사이트 등록 (메인)
-  currentUrl: document.getElementById('currentUrl'),
   addCurrentPage: document.getElementById('addCurrentPage'),
+  siteCounterMain: document.getElementById('siteCounterMain'),
+  rssCounterMain: document.getElementById('rssCounterMain'),
   
   // 설정 - 사이트 관리
   siteListManage: document.getElementById('siteListManage'),
@@ -51,13 +52,15 @@ const elements = {
   siteCountBadge: document.getElementById('siteCountBadge'),
   siteLimitCounter: document.getElementById('siteLimitCounter'),
   
-  // 메인 뷰 플랫폼 섹션
-  connectedPlatformsMain: document.getElementById('connectedPlatformsMain'),
-  connectedPlatformsGrid: document.getElementById('connectedPlatformsGrid'),
+  // 메인 뷰 플랫폼 섹션 (새 레이아웃)
+  platformsSection: document.getElementById('platformsSection'),
+  platformsGrid: document.getElementById('platformsGrid'),
   
   // RSS 관련 요소
   rssFeedsSection: document.getElementById('rssFeedsSection'),
   rssFeedGrid: document.getElementById('rssFeedGrid'),
+  rssUrlInput: document.getElementById('rssUrlInput'),
+  addRssFeed: document.getElementById('addRssFeed'),
   rssFeedListManage: document.getElementById('rssFeedListManage'),
   rssFeedCountSettings: document.getElementById('rssFeedCountSettings'),
   rssLimitCounter: document.getElementById('rssLimitCounter'),
@@ -70,12 +73,9 @@ const elements = {
   rssFeedsDetailContent: document.getElementById('rssFeedsDetailContent'),
   
   // RSS 인라인 폼 (Settings)
-  rssFeedUrlInline: document.getElementById('rssFeedUrlInline'),
-  rssFeedNameInline: document.getElementById('rssFeedNameInline'),
-  autoDetectRssInline: document.getElementById('autoDetectRssInline'),
-  addRssFeedInline: document.getElementById('addRssFeedInline'),
-  rssInlineMessage: document.getElementById('rssInlineMessage'),
-  popularFeedsListInline: document.getElementById('popularFeedsListInline')
+  popularFeedsSection: document.getElementById('popularFeedsSection'),
+  popularFeedsListMain: document.getElementById('popularFeedsListMain'),
+  rssEmptyHint: document.getElementById('rssEmptyHint')
 };
 
 // RSS 피드 상태 캐시
@@ -85,12 +85,17 @@ let rssFeeds = [];
 let platformsStatus = {
   gmail: { connected: false, count: 0 },
   youtube: { connected: false, count: 0 },
+  drive: { connected: false, count: 0 },
   github: { connected: false, count: 0 },
   reddit: { connected: false, count: 0 },
   discord: { connected: false, count: 0 }
 };
 
+// 메인 팝업에 표시할 플랫폼 (Gmail, YouTube, Drive만)
+const MAIN_PLATFORMS = ['gmail', 'youtube', 'drive'];
+
 let currentTabId = null;
+let currentTabUrl = null;
 
 // 초기화
 document.addEventListener('DOMContentLoaded', async () => {
@@ -108,8 +113,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupStorageListener();
     setupPlatformEventListeners();
     setupPlatformChipEvents();
+    setupMainRSSEvents(); // 메인 뷰 RSS 추가 폼 이벤트
     setupToggleEventListeners(); // 토글 이벤트 리스너
-    setupInlineRSSEventListeners(); // 인라인 RSS 폼 이벤트
+    setupInlineRSSEventListeners(); // 인라인 RSS 폼 이벤트 (Settings)
   } catch (error) {
     console.error('초기화 오류:', error);
   }
@@ -170,13 +176,13 @@ function showView(view) {
   }
 }
 
-// 현재 탭 URL 가져오기
+// 현재 탭 정보 가져오기
 async function getCurrentTab() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab && tab.url) {
-      elements.currentUrl.value = tab.url;
       currentTabId = tab.id;
+      currentTabUrl = tab.url;
     }
   } catch (error) {
     console.error('탭 정보 가져오기 실패:', error);
@@ -333,7 +339,41 @@ async function refreshAll() {
   let platformNewCount = 0;
   
   try {
-    // 1. 웹사이트 체크
+    // 1. 플랫폼 체크 (토글이 활성화되고 연결된 플랫폼만) - 화면 순서 첫 번째
+    if (enablePlatforms) {
+      const connectedPlatforms = Object.keys(platformsStatus).filter(p => platformsStatus[p]?.connected);
+      
+      // 모든 연결된 플랫폼 체크 중 표시
+      connectedPlatforms.forEach(platform => setPlatformChecking(platform, true));
+      
+      const platformResults = await chrome.runtime.sendMessage({ action: 'checkAllPlatforms' });
+      
+      if (platformResults) {
+        platformNewCount = platformResults.totalCount || 0;
+        totalNewCount += platformNewCount;
+        
+        // 플랫폼 상태 업데이트 및 체크 완료 표시
+        const platformList = ['gmail', 'youtube', 'drive', 'github', 'reddit', 'discord'];
+        for (const platform of platformList) {
+          if (platformResults[platform] && platformsStatus[platform]?.connected) {
+            platformsStatus[platform].count = platformResults[platform].count;
+            platformsStatus[platform].items = platformResults[platform].items;
+            
+            // 체크 완료 표시
+            setPlatformChecking(platform, false);
+            showPlatformCheckDone(platform, platformResults[platform].count > 0);
+          }
+        }
+        
+        await savePlatformsStatus();
+        await updatePlatformUI();
+      } else {
+        // 에러 시 체크 중 상태 제거
+        connectedPlatforms.forEach(platform => setPlatformChecking(platform, false));
+      }
+    }
+    
+    // 2. 웹사이트 체크 - 화면 순서 두 번째
     for (let i = 0; i < sites.length; i++) {
       // 체크 중 하이라이트
       setSiteChecking(i, true);
@@ -358,41 +398,7 @@ async function refreshAll() {
       }
     }
     
-    // 2. 플랫폼 체크 (토글이 활성화되고 연결된 플랫폼만)
-    if (enablePlatforms) {
-      const connectedPlatforms = Object.keys(platformsStatus).filter(p => platformsStatus[p]?.connected);
-      
-      // 모든 연결된 플랫폼 체크 중 표시
-      connectedPlatforms.forEach(platform => setPlatformChecking(platform, true));
-      
-      const platformResults = await chrome.runtime.sendMessage({ action: 'checkAllPlatforms' });
-      
-      if (platformResults) {
-        platformNewCount = platformResults.totalCount || 0;
-        totalNewCount += platformNewCount;
-        
-        // 플랫폼 상태 업데이트 및 체크 완료 표시
-        const platformList = ['gmail', 'youtube', 'github', 'reddit', 'discord'];
-        for (const platform of platformList) {
-          if (platformResults[platform] && platformsStatus[platform]?.connected) {
-            platformsStatus[platform].count = platformResults[platform].count;
-            platformsStatus[platform].items = platformResults[platform].items;
-            
-            // 체크 완료 표시
-            setPlatformChecking(platform, false);
-            showPlatformCheckDone(platform, platformResults[platform].count > 0);
-          }
-        }
-        
-        await savePlatformsStatus();
-        await updatePlatformUI();
-    } else {
-        // 에러 시 체크 중 상태 제거
-        connectedPlatforms.forEach(platform => setPlatformChecking(platform, false));
-      }
-    }
-    
-    // 3. RSS 피드 체크 (토글이 활성화된 경우만)
+    // 3. RSS 피드 체크 (토글이 활성화된 경우만) - 화면 순서 세 번째
     console.log('[RSS] enableRSSFeeds:', enableRSSFeeds, 'rssFeeds.length:', rssFeeds.length);
     if (enableRSSFeeds && rssFeeds.length > 0) {
       console.log('[RSS] Starting RSS check for', rssFeeds.length, 'feeds');
@@ -489,6 +495,13 @@ function setAllItemsDisabled(disabled) {
     btn.style.opacity = disabled ? '0' : '';
   });
   
+  // RSS 추가 버튼 (메인 뷰)
+  if (elements.addRssFeed) {
+    elements.addRssFeed.disabled = disabled;
+    elements.addRssFeed.style.opacity = disabled ? '0.5' : '1';
+    elements.addRssFeed.style.cursor = disabled ? 'not-allowed' : 'pointer';
+  }
+  
   // RSS 칩 삭제 버튼
   document.querySelectorAll('.rss-chip-delete').forEach(btn => {
     btn.disabled = disabled;
@@ -511,7 +524,7 @@ function setSiteChecking(index, isChecking) {
 
 // 플랫폼 체크 중 하이라이트
 function setPlatformChecking(platform, isChecking) {
-  const chip = elements.connectedPlatformsGrid?.querySelector(`.platform-chip[data-platform="${platform}"]`);
+  const chip = elements.platformsGrid?.querySelector(`.platform-chip[data-platform="${platform}"]`);
   if (!chip) return;
   
   if (isChecking) {
@@ -524,7 +537,7 @@ function setPlatformChecking(platform, isChecking) {
 
 // 플랫폼 체크 완료 표시 (사이트와 동일한 체크마크)
 function showPlatformCheckDone(platform, result) {
-  const chip = elements.connectedPlatformsGrid?.querySelector(`.platform-chip[data-platform="${platform}"]`);
+  const chip = elements.platformsGrid?.querySelector(`.platform-chip[data-platform="${platform}"]`);
   if (!chip) return;
   
   chip.classList.remove('checking');
@@ -684,7 +697,7 @@ let draggedIndex = null;
 // 사이트 그리드 렌더링 (메인)
 function renderSiteGrid(sites) {
   if (sites.length === 0) {
-    elements.siteGrid.innerHTML = '<div class="site-empty">No sites added yet</div>';
+    elements.siteGrid.innerHTML = '';
     return;
   }
   
@@ -900,10 +913,10 @@ async function updateSiteSelector(index, selector) {
 
 // 사이트 추가 (자동 감지)
 async function addCurrentSite() {
-  const url = elements.currentUrl.value.trim();
+  const url = currentTabUrl;
   
   if (!url) {
-    showToast('Please enter URL', 'error');
+    showToast('No page to add', 'error');
     return;
   }
   
@@ -1061,6 +1074,8 @@ async function removeItemFromPlatform(platform, itemLink) {
       if (itemIndex === -1) itemIndex = 0;
     } else if (platform === 'youtube') {
       itemIndex = items.findIndex(i => itemLink.includes(i.id));
+    } else if (platform === 'drive') {
+      itemIndex = items.findIndex(i => itemLink.includes(i.id) || i.webViewLink === itemLink);
     } else if (platform === 'github') {
       itemIndex = items.findIndex(i => {
         const itemUrl = i.url?.replace('api.github.com/repos', 'github.com').replace('/pulls/', '/pull/');
@@ -1471,7 +1486,7 @@ async function markAllAsRead() {
   await markAllSitesAsRead();
   
   // 플랫폼 읽음 처리 (모든 플랫폼)
-  const platforms = ['gmail', 'youtube', 'github', 'reddit', 'discord'];
+  const platforms = ['gmail', 'youtube', 'drive', 'github', 'reddit', 'discord'];
   for (const platform of platforms) {
     if (platformsStatus[platform]?.connected && platformsStatus[platform]?.count > 0) {
       console.log(`[Popup] Marking ${platform} as read...`);
@@ -1674,6 +1689,23 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// 파일 타입에 따른 이모지 반환 (Google Drive용)
+function getFileEmoji(mimeType) {
+  if (!mimeType) return '📄';
+  
+  if (mimeType.includes('document')) return '📄';
+  if (mimeType.includes('spreadsheet')) return '📊';
+  if (mimeType.includes('presentation')) return '📽️';
+  if (mimeType.includes('form')) return '📝';
+  if (mimeType.includes('folder')) return '📁';
+  if (mimeType.includes('image')) return '🖼️';
+  if (mimeType.includes('video')) return '🎬';
+  if (mimeType.includes('audio')) return '🎵';
+  if (mimeType.includes('pdf')) return '📕';
+  
+  return '📄';
+}
+
 // ===== 유틸리티 =====
 
 function showToast(message, type = '') {
@@ -1704,6 +1736,12 @@ async function updateSiteCountBadge() {
 
 // 사이트 제한 카운터 업데이트
 function updateSiteLimitCounter(count) {
+  // 메인 팝업 카운터 업데이트
+  if (elements.siteCounterMain) {
+    elements.siteCounterMain.textContent = `${count}/${LIMITS.sites}`;
+  }
+  
+  // 설정 페이지 카운터 업데이트
   if (!elements.siteLimitCounter) return;
   
   elements.siteLimitCounter.textContent = `${count}/${LIMITS.sites}`;
@@ -1752,8 +1790,10 @@ async function connectPlatform(platform) {
     const platformNames = {
       gmail: 'Gmail',
       youtube: 'YouTube',
+      drive: 'Drive',
       github: 'GitHub',
-      slack: 'Slack'
+      reddit: 'Reddit',
+      discord: 'Discord'
     };
     
     const confirmed = confirm(`Disconnect ${platformNames[platform]}?\n\nYou can reconnect anytime.`);
@@ -1774,6 +1814,9 @@ async function connectPlatform(platform) {
       break;
     case 'github':
       await connectGitHub();
+      break;
+    case 'drive':
+      await connectDrive();
       break;
     case 'reddit':
       await connectReddit();
@@ -1801,6 +1844,9 @@ async function disconnectPlatform(platform) {
       case 'github':
         result = await chrome.runtime.sendMessage({ action: 'disconnectGitHub' });
         break;
+      case 'drive':
+        result = await chrome.runtime.sendMessage({ action: 'disconnectDrive' });
+        break;
       case 'reddit':
         result = await chrome.runtime.sendMessage({ action: 'disconnectReddit' });
         break;
@@ -1821,8 +1867,10 @@ async function disconnectPlatform(platform) {
       const platformNames = {
         gmail: 'Gmail',
         youtube: 'YouTube',
+        drive: 'Drive',
         github: 'GitHub',
-        slack: 'Slack'
+        reddit: 'Reddit',
+        discord: 'Discord'
       };
       showToast(`${platformNames[platform]} disconnected`, 'success');
     } else {
@@ -1845,6 +1893,10 @@ async function markPlatformAsSeen(platform) {
       // Gmail: 현재 메시지들을 "본 것"으로 표시 + Gmail에서 실제 읽음 처리
       result = await chrome.runtime.sendMessage({ action: 'markGmailAsSeen' });
       console.log('[Popup] markGmailAsSeen result:', result);
+    } else if (platform === 'drive') {
+      // Google Drive: 파일 본 것으로 표시
+      result = await chrome.runtime.sendMessage({ action: 'markDriveAsSeen' });
+      console.log('[Popup] markDriveAsSeen result:', result);
     } else if (platform === 'github') {
       // GitHub: 알림을 "본 것"으로 표시 + GitHub에서 실제 읽음 처리
       result = await chrome.runtime.sendMessage({ action: 'markGitHubAllRead' });
@@ -1870,42 +1922,38 @@ async function markPlatformAsSeen(platform) {
 // Gmail 연결
 async function connectGmail() {
   try {
-    showToast('Connecting to Gmail...', 'info');
+    showToast('Connecting to Google Account...', 'info');
     
-    // Gmail OAuth 연결
     const result = await chrome.runtime.sendMessage({ action: 'connectGmail' });
     
     if (result.success) {
-      showToast('Gmail connected!', 'success');
-      platformsStatus.gmail.connected = true;
-      await updatePlatformUI();
-      await savePlatformsStatus();
+      showToast('Google Account connected!', 'success');
+      // 모든 Google 플랫폼 상태 다시 로드 (Gmail, YouTube, Drive 자동 연결됨)
+      await loadPlatformsStatus();
     } else {
-      showToast(result.error || 'Gmail connection failed', 'error');
+      showToast(result.error || 'Connection failed', 'error');
     }
   } catch (error) {
-    showToast('Gmail connection failed', 'error');
+    showToast('Connection failed', 'error');
   }
 }
 
-// YouTube 연결
+// YouTube 연결 (자동으로 Gmail, Drive도 연결됨)
 async function connectYouTube() {
   try {
-    showToast('Connecting to YouTube...', 'info');
+    showToast('Connecting to Google Account...', 'info');
     
-    // YouTube OAuth 연결
     const result = await chrome.runtime.sendMessage({ action: 'connectYouTube' });
     
     if (result.success) {
-      showToast('YouTube connected!', 'success');
-      platformsStatus.youtube.connected = true;
-      await updatePlatformUI();
-      await savePlatformsStatus();
+      showToast('Google Account connected!', 'success');
+      // 모든 Google 플랫폼 상태 다시 로드 (Gmail, YouTube, Drive 자동 연결됨)
+      await loadPlatformsStatus();
     } else {
-      showToast(result.error || 'YouTube connection failed', 'error');
+      showToast(result.error || 'Connection failed', 'error');
     }
   } catch (error) {
-    showToast('YouTube connection failed', 'error');
+    showToast('Connection failed', 'error');
   }
 }
 
@@ -1948,6 +1996,26 @@ async function connectGitHub() {
   } catch (error) {
     console.error('GitHub connect error:', error);
     showToast('GitHub connection failed', 'error');
+  }
+}
+
+// Google Drive 연결 (Gmail/YouTube와 동일한 OAuth)
+async function connectDrive() {
+  try {
+    showToast('Connecting to Google Account...', 'info');
+    
+    const result = await chrome.runtime.sendMessage({ action: 'connectDrive' });
+    
+    if (result.success) {
+      showToast('Google Account connected!', 'success');
+      // 모든 Google 플랫폼 상태 다시 로드 (Gmail, YouTube, Drive 자동 연결됨)
+      await loadPlatformsStatus();
+    } else {
+      showToast(result.error || 'Connection failed', 'error');
+    }
+  } catch (error) {
+    console.error('Google Drive connect error:', error);
+    showToast('Connection failed', 'error');
   }
 }
 
@@ -2073,6 +2141,15 @@ async function loadPlatformsStatus() {
       }
     }
     
+    // Google Drive 실제 연결 상태 확인
+    const driveStatus = await chrome.runtime.sendMessage({ action: 'getDriveStatus' });
+    if (driveStatus) {
+      platformsStatus.drive.connected = driveStatus.connected;
+      if (driveStatus.email) {
+        platformsStatus.drive.email = driveStatus.email;
+      }
+    }
+    
     // Reddit 실제 연결 상태 확인
     const redditStatus = await chrome.runtime.sendMessage({ action: 'getRedditStatus' });
     if (redditStatus) {
@@ -2102,6 +2179,7 @@ async function updatePlatformUI() {
   // 설정 화면 버튼 업데이트
   updatePlatformButton('gmail', platformsStatus.gmail.connected);
   updatePlatformButton('youtube', platformsStatus.youtube.connected);
+  updatePlatformButton('drive', platformsStatus.drive.connected);
   updatePlatformButton('github', platformsStatus.github.connected);
   updatePlatformButton('reddit', platformsStatus.reddit.connected);
   updatePlatformButton('discord', platformsStatus.discord.connected);
@@ -2126,47 +2204,76 @@ function updatePlatformButton(platform, connected) {
 
 // 메인 화면 플랫폼 섹션 업데이트
 async function updateMainPlatformsSection() {
-  if (!elements.connectedPlatformsMain || !elements.connectedPlatformsGrid) return;
+  if (!elements.platformsGrid) return;
   
   // 토글 상태를 스토리지에서 직접 확인
   const { enablePlatforms = true } = await chrome.storage.sync.get('enablePlatforms');
   
-  // 연결된 플랫폼이 있는지 확인
-  const hasConnected = Object.values(platformsStatus).some(p => p.connected);
-  
-  // 토글이 비활성화되었거나 연결된 플랫폼이 없으면 숨김
-  if (!enablePlatforms || !hasConnected) {
-    elements.connectedPlatformsMain.style.display = 'none';
-    return;
+  // 플랫폼 섹션 표시/숨김 (토글 기반)
+  if (elements.platformsSection) {
+    elements.platformsSection.style.display = enablePlatforms ? 'block' : 'none';
   }
   
-  // 섹션 표시
-  elements.connectedPlatformsMain.style.display = 'block';
+  // 플랫폼 칩 렌더링
+  renderPlatformGrid();
+}
+
+// 플랫폼 그리드 렌더링 (사이트/RSS와 동일한 스타일)
+function renderPlatformGrid() {
+  if (!elements.platformsGrid) return;
   
-  // 각 플랫폼 칩 표시/숨김
-  Object.keys(platformsStatus).forEach(platform => {
-    const chip = elements.connectedPlatformsGrid.querySelector(`[data-platform="${platform}"]`);
-    if (chip) {
-      const status = platformsStatus[platform];
-      chip.style.display = status.connected ? 'flex' : 'none';
-      
-      // 뱃지 업데이트
-      const badge = chip.querySelector('.platform-chip-badge');
-      if (badge) {
-        badge.textContent = status.count || '0';
-        badge.style.display = status.count > 0 ? 'inline-flex' : 'none';
+  const platformIcons = {
+    gmail: `<img src="icons/gmail.png" width="16" height="16" alt="Gmail">`,
+    youtube: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="#FF0000"/></svg>`,
+    drive: `<svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M17 6L31 6 45 30 31 30z"/><path fill="#1976D2" d="M9.875 42L16.938 30 45 30 37.938 42z"/><path fill="#4CAF50" d="M3 30L17 6 24 18 10 42z"/><path fill="#EA4335" d="M17 6L24 18 31 6z"/><path fill="#00796B" d="M10 42L17 30 24 18 17 30z" opacity=".2"/><path fill="#1A237E" d="M31 30L24 18 38 42 31 30z" opacity=".2"/><path fill="#F57F17" d="M45 30L38 42 31 30z" opacity=".2"/></svg>`,
+    github: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" fill="#333"/></svg>`,
+    reddit: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z" fill="#FF4500"/></svg>`,
+    discord: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" fill="#5865F2"/></svg>`
+  };
+  
+  const platformNames = {
+    gmail: 'Gmail',
+    youtube: 'YouTube',
+    drive: 'Drive',
+    github: 'GitHub',
+    reddit: 'Reddit',
+    discord: 'Discord'
+  };
+  
+  // 메인 팝업에는 MAIN_PLATFORMS만 표시 (Gmail, YouTube, Drive)
+  const platforms = MAIN_PLATFORMS;
+  
+  elements.platformsGrid.innerHTML = platforms.map(platform => {
+    const status = platformsStatus[platform];
+    const isConnected = status?.connected;
+    const count = status?.count || 0;
+    
+    let chipClass = 'platform-chip';
+    let badgeHtml = '';
+    let deleteBtn = '';
+    
+    if (!isConnected) {
+      chipClass += ' disconnected';
+    } else {
+      if (count > 0) {
+        badgeHtml = `<span class="platform-chip-badge clickable" data-platform="${platform}" title="${count} new">${count}</span>`;
+        chipClass += ' has-updates';
       }
-      
-      // 업데이트 있으면 하이라이트
-      if (status.count > 0) {
-        chip.classList.add('has-updates');
-        chip.title = `${status.count} new - Click to view`;
-      } else {
-        chip.classList.remove('has-updates');
-        chip.title = 'No new updates';
-      }
+      deleteBtn = `<button class="platform-chip-delete" data-platform="${platform}" title="Disconnect">×</button>`;
     }
-  });
+    
+    return `
+      <div class="${chipClass}" data-platform="${platform}" title="${isConnected ? (count > 0 ? `${count} new - Click to view` : 'Connected - Click to view') : 'Click to connect'}">
+        ${platformIcons[platform] || ''}
+        <span class="platform-chip-name">${platformNames[platform]}</span>
+        ${badgeHtml}
+        ${deleteBtn}
+      </div>
+    `;
+  }).join('');
+  
+  // 칩 클릭 이벤트
+  setupPlatformChipEvents();
 }
 
 // 플랫폼 아이템 드롭다운 표시 (사이트 드롭다운과 동일한 스타일)
@@ -2185,6 +2292,7 @@ async function showPlatformItemsDropdown(platform) {
   const platformNames = {
     gmail: '📧 Gmail',
     youtube: '🎬 YouTube',
+    drive: '📁 Drive',
     github: '🐙 GitHub',
     reddit: '🔴 Reddit',
     discord: '💬 Discord'
@@ -2193,6 +2301,7 @@ async function showPlatformItemsDropdown(platform) {
   const platformLinks = {
     gmail: 'https://mail.google.com',
     youtube: 'https://youtube.com/feed/subscriptions',
+    drive: 'https://drive.google.com/drive/shared-with-me',
     github: 'https://github.com/notifications',
     reddit: 'https://reddit.com/message/inbox',
     discord: 'https://discord.com/channels/@me'
@@ -2219,6 +2328,15 @@ async function showPlatformItemsDropdown(platform) {
           <span class="post-date">${escapeHtml(item.channelTitle || '')}</span>
         </a>
       `).join('');
+    } else if (platform === 'drive') {
+      return platformItems.map((item, idx) => {
+        const fileEmoji = getFileEmoji(item.mimeType);
+        return `
+        <a href="${item.webViewLink || 'https://drive.google.com'}" class="dropdown-item" target="_blank" data-item-idx="${idx}">
+          <span class="post-title">${fileEmoji} ${escapeHtml(item.name || 'New file')}</span>
+          <span class="post-date">from ${escapeHtml(item.sharedBy || 'Unknown')}</span>
+        </a>
+      `}).join('');
     } else if (platform === 'github') {
       return platformItems.map((item, idx) => {
         const typeEmoji = {
@@ -2376,26 +2494,32 @@ async function showPlatformItemsDropdown(platform) {
 
 // 플랫폼 칩 클릭 이벤트 설정
 function setupPlatformChipEvents() {
-  const chips = document.querySelectorAll('.platform-chip');
+  const chips = elements.platformsGrid?.querySelectorAll('.platform-chip');
+  if (!chips) return;
+  
   chips.forEach(chip => {
-    chip.addEventListener('click', (e) => {
+    chip.addEventListener('click', async (e) => {
       // 삭제 버튼 클릭 시 무시
       if (e.target.classList.contains('platform-chip-delete')) return;
       
       const platform = chip.dataset.platform;
       const status = platformsStatus[platform];
       
-      // 새 아이템이 있으면 드롭다운, 없으면 해당 페이지 열기
-      if (status && status.count > 0) {
+      if (!status?.connected) {
+        // 연결되지 않은 경우 - 연결 시도
+        await connectPlatform(platform);
+      } else if (status.count > 0) {
+        // 연결되어 있고 새 아이템이 있으면 드롭다운
         showPlatformItemsDropdown(platform);
       } else {
+        // 연결되어 있지만 새 아이템 없으면 해당 페이지 열기
         openPlatformDetails(platform);
       }
     });
   });
   
-  // 삭제 버튼 이벤트
-  document.querySelectorAll('.platform-chip-delete').forEach(btn => {
+  // 삭제(연결 해제) 버튼 이벤트
+  elements.platformsGrid?.querySelectorAll('.platform-chip-delete').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const platform = btn.dataset.platform;
@@ -2404,19 +2528,71 @@ function setupPlatformChipEvents() {
   });
 }
 
+// 메인 뷰 RSS 추가 폼 이벤트 설정
+function setupMainRSSEvents() {
+  const addBtn = elements.addRssFeed;
+  const urlInput = elements.rssUrlInput;
+  
+  if (addBtn && urlInput) {
+    addBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) {
+        showToast('Please enter an RSS feed URL', 'error');
+        return;
+      }
+      
+      try {
+        addBtn.disabled = true;
+        addBtn.textContent = 'Adding...';
+        
+        const result = await chrome.runtime.sendMessage({
+          action: 'addRSSFeed',
+          feedUrl: url,
+          feedName: ''
+        });
+        
+        if (result.success) {
+          showToast('RSS feed added!', 'success');
+          urlInput.value = '';
+          await loadRSSFeeds();
+        } else {
+          showToast(result.error || 'Failed to add RSS feed', 'error');
+        }
+      } catch (error) {
+        console.error('RSS add error:', error);
+        showToast('Failed to add RSS feed', 'error');
+      } finally {
+        addBtn.disabled = false;
+        addBtn.textContent = 'Add Feed';
+      }
+    });
+  }
+}
+
 // 플랫폼 칩에서 연결 해제 (메인 팝업)
 async function disconnectPlatformFromChip(platform) {
   try {
     const platformNames = {
       gmail: 'Gmail',
       youtube: 'YouTube',
+      drive: 'Drive',
       github: 'GitHub',
       reddit: 'Reddit',
       discord: 'Discord'
     };
     
+    // 액션 이름 매핑 (대소문자 정확히)
+    const actionNames = {
+      gmail: 'disconnectGmail',
+      youtube: 'disconnectYouTube',
+      drive: 'disconnectDrive',
+      github: 'disconnectGitHub',
+      reddit: 'disconnectReddit',
+      discord: 'disconnectDiscord'
+    };
+    
     // 연결 해제 요청
-    const action = `disconnect${platform.charAt(0).toUpperCase() + platform.slice(1)}`;
+    const action = actionNames[platform];
     const result = await chrome.runtime.sendMessage({ action });
     
     if (result?.success) {
@@ -2446,11 +2622,17 @@ function openPlatformDetails(platform) {
     case 'youtube':
       chrome.tabs.create({ url: 'https://www.youtube.com/feed/subscriptions' });
       break;
+    case 'drive':
+      chrome.tabs.create({ url: 'https://drive.google.com/drive/shared-with-me' });
+      break;
     case 'github':
       chrome.tabs.create({ url: 'https://github.com/notifications' });
       break;
-    case 'slack':
-      chrome.tabs.create({ url: 'https://slack.com' });
+    case 'reddit':
+      chrome.tabs.create({ url: 'https://www.reddit.com/message/inbox' });
+      break;
+    case 'discord':
+      chrome.tabs.create({ url: 'https://discord.com/channels/@me' });
       break;
   }
 }
@@ -2483,9 +2665,9 @@ async function updateRSSSection() {
   // 토글 상태를 스토리지에서 직접 확인
   const { enableRSSFeeds = true } = await chrome.storage.sync.get('enableRSSFeeds');
   
-  // 메인 뷰 RSS 섹션 - 토글이 활성화되고 피드가 있을 때만 표시 (Connected Platforms과 동일)
+  // 메인 뷰 RSS 섹션 - 토글이 활성화되면 항상 표시 (입력 폼 포함)
   if (elements.rssFeedsSection) {
-    elements.rssFeedsSection.style.display = (enableRSSFeeds && hasFeeds) ? 'block' : 'none';
+    elements.rssFeedsSection.style.display = enableRSSFeeds ? 'block' : 'none';
   }
   
   // 설정 뷰 RSS 피드 개수
@@ -2500,6 +2682,12 @@ async function updateRSSSection() {
 
 // RSS 제한 카운터 업데이트
 function updateRSSLimitCounter(count) {
+  // 메인 팝업 카운터 업데이트
+  if (elements.rssCounterMain) {
+    elements.rssCounterMain.textContent = `${count}/${LIMITS.rssFeeds}`;
+  }
+  
+  // 설정 페이지 카운터 업데이트
   if (!elements.rssLimitCounter) return;
   
   elements.rssLimitCounter.textContent = `${count}/${LIMITS.rssFeeds}`;
@@ -2536,7 +2724,7 @@ function updateRSSLimitCounter(count) {
 function renderRSSFeedGrid(feeds) {
   if (!elements.rssFeedGrid) return;
   
-  // 피드가 없으면 그리드 비우기 (섹션 자체가 숨겨짐)
+  // 피드가 없으면 그리드 비우기 (힌트는 Popular Feeds 아래에 표시)
   if (feeds.length === 0) {
     elements.rssFeedGrid.innerHTML = '';
     return;
@@ -2859,29 +3047,12 @@ function setupToggleEventListeners() {
 }
 
 // ============================================
-// 인라인 RSS 폼 관련
+// Popular Feeds 관련 (메인 팝업)
 // ============================================
 
-// 인라인 RSS 이벤트 리스너 설정
-function setupInlineRSSEventListeners() {
-  // 인라인 RSS 추가 버튼
-  elements.addRssFeedInline?.addEventListener('click', addRSSFeedInline);
-  
-  // 자동 감지 버튼
-  elements.autoDetectRssInline?.addEventListener('click', autoDetectRSSFeedInline);
-  
-  // Enter 키로 추가
-  elements.rssFeedUrlInline?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') addRSSFeedInline();
-  });
-  
-  // 인라인 인기 피드 렌더링
-  renderPopularFeedsInline();
-}
-
-// 인라인 인기 피드 렌더링
+// Popular Feeds 렌더링
 function renderPopularFeedsInline() {
-  if (!elements.popularFeedsListInline) return;
+  if (!elements.popularFeedsListMain || !elements.popularFeedsSection) return;
   
   const popularFeeds = [
     { name: 'BBC News', url: 'https://feeds.bbci.co.uk/news/rss.xml' },
@@ -2889,120 +3060,64 @@ function renderPopularFeedsInline() {
     { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' }
   ];
   
-  const isLimitReached = rssFeeds.length >= LIMITS.rssFeeds;
+  // 이미 추가된 피드 URL 목록
+  const addedUrls = rssFeeds.map(f => f.url);
   
-  elements.popularFeedsListInline.innerHTML = popularFeeds.map(feed => `
-    <button class="popular-feed-btn ${isLimitReached ? 'disabled' : ''}" 
+  // 추가되지 않은 피드만 필터링
+  const availableFeeds = popularFeeds.filter(feed => !addedUrls.includes(feed.url));
+  
+  // 모두 추가되었거나 제한 도달 시 섹션 숨김
+  if (availableFeeds.length === 0 || rssFeeds.length >= LIMITS.rssFeeds) {
+    elements.popularFeedsSection.style.display = 'none';
+    return;
+  }
+  
+  elements.popularFeedsSection.style.display = 'block';
+  
+  elements.popularFeedsListMain.innerHTML = availableFeeds.map(feed => `
+    <button class="popular-feed-btn" 
             data-url="${feed.url}" 
-            data-name="${feed.name}"
-            ${isLimitReached ? 'disabled' : ''}>
-      ${feed.name}
+            data-name="${feed.name}">
+      + ${feed.name}
     </button>
   `).join('');
   
-  // 인기 피드 클릭 이벤트 (제한 도달 시 무시)
-  if (!isLimitReached) {
-    elements.popularFeedsListInline.querySelectorAll('.popular-feed-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (elements.rssFeedUrlInline) elements.rssFeedUrlInline.value = btn.dataset.url;
-        if (elements.rssFeedNameInline) elements.rssFeedNameInline.value = btn.dataset.name;
-      });
-    });
-  }
-}
-
-// 인라인 RSS 피드 추가
-async function addRSSFeedInline() {
-  const feedUrl = elements.rssFeedUrlInline?.value.trim();
-  const feedName = elements.rssFeedNameInline?.value.trim();
   
-  if (!feedUrl) {
-    showInlineRSSMessage('Please enter a feed URL', 'error');
-    return;
-  }
-  
-  // 제한 체크
-  if (rssFeeds.length >= LIMITS.rssFeeds) {
-    showInlineRSSMessage(`RSS feed limit reached (${LIMITS.rssFeeds} max)`, 'error');
-    return;
-  }
-  
-  try {
-    showInlineRSSMessage('Adding feed...', 'info');
-    
-    const response = await chrome.runtime.sendMessage({
-      action: 'addRSSFeed',
-      feedUrl: feedUrl,
-      feedName: feedName
-    });
-    
-    if (response && response.success) {
-      showInlineRSSMessage('Feed added successfully!', 'success');
+  // 인기 피드 클릭 이벤트 - 바로 추가
+  elements.popularFeedsListMain.querySelectorAll('.popular-feed-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const feedUrl = btn.dataset.url;
+      const feedName = btn.dataset.name;
       
-      // 입력 필드 초기화
-      if (elements.rssFeedUrlInline) elements.rssFeedUrlInline.value = '';
-      if (elements.rssFeedNameInline) elements.rssFeedNameInline.value = '';
+      btn.disabled = true;
+      btn.textContent = 'Adding...';
       
-      // RSS 피드 목록 새로고침
-      await loadRSSFeeds();
-      
-      // 2초 후 메시지 숨김
-      setTimeout(() => hideInlineRSSMessage(), 2000);
-    } else {
-      showInlineRSSMessage(response?.error || 'Failed to add feed', 'error');
-    }
-  } catch (error) {
-    console.error('RSS 피드 추가 오류:', error);
-    showInlineRSSMessage('Failed to add feed', 'error');
-  }
-}
-
-// 인라인 자동 감지
-async function autoDetectRSSFeedInline() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.url) {
-      showInlineRSSMessage('No active tab', 'error');
-      return;
-    }
-    
-    showInlineRSSMessage('Detecting RSS feed...', 'info');
-    
-    const response = await chrome.runtime.sendMessage({
-      action: 'detectRSSFeed',
-      url: tab.url
-    });
-    
-    if (response && response.feedUrl) {
-      if (elements.rssFeedUrlInline) elements.rssFeedUrlInline.value = response.feedUrl;
-      if (elements.rssFeedNameInline && response.feedTitle) {
-        elements.rssFeedNameInline.value = response.feedTitle;
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'addRSSFeed',
+          feedUrl: feedUrl,
+          feedName: feedName
+        });
+        
+        if (response && response.success) {
+          showToast(`${feedName} added!`, 'success');
+          await loadRSSFeeds(); // 이 함수가 renderPopularFeedsInline을 호출하여 추가된 항목 제거
+        } else {
+          showToast(response?.error || 'Failed to add feed', 'error');
+          btn.disabled = false;
+          btn.textContent = `+ ${feedName}`;
+        }
+      } catch (error) {
+        console.error('RSS 피드 추가 오류:', error);
+        showToast('Failed to add feed', 'error');
+        btn.disabled = false;
+        btn.textContent = `+ ${feedName}`;
       }
-      showInlineRSSMessage('RSS feed detected!', 'success');
-      setTimeout(() => hideInlineRSSMessage(), 2000);
-    } else {
-      showInlineRSSMessage('No RSS feed found', 'error');
-    }
-  } catch (error) {
-    console.error('RSS 감지 오류:', error);
-    showInlineRSSMessage('Detection failed', 'error');
-  }
+    });
+  });
 }
 
-// 인라인 RSS 메시지 표시
-function showInlineRSSMessage(message, type) {
-  if (elements.rssInlineMessage) {
-    elements.rssInlineMessage.textContent = message;
-    elements.rssInlineMessage.className = `rss-message show ${type}`;
-    elements.rssInlineMessage.style.display = 'block';
-  }
-}
-
-// 인라인 RSS 메시지 숨김
-function hideInlineRSSMessage() {
-  if (elements.rssInlineMessage) {
-    elements.rssInlineMessage.className = 'rss-message';
-    elements.rssInlineMessage.textContent = '';
-    elements.rssInlineMessage.style.display = 'none';
-  }
+// 설정 인라인 RSS 이벤트 리스너 (더 이상 사용하지 않음)
+function setupInlineRSSEventListeners() {
+  renderPopularFeedsInline();
 }

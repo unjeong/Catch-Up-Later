@@ -4,6 +4,7 @@
 importScripts('platforms/gmail.js');
 importScripts('platforms/youtube.js');
 importScripts('platforms/github.js');
+importScripts('platforms/drive.js');
 importScripts('platforms/reddit.js');
 importScripts('platforms/discord.js');
 
@@ -170,7 +171,13 @@ async function handleMessage(message) {
       return await self.GmailManager.getGmailStatus();
     
     case 'connectGmail':
-      return await self.GmailManager.connectGmail();
+      const gmailConnectResult = await self.GmailManager.connectGmail();
+      if (gmailConnectResult.success) {
+        // Gmail 연결 시 YouTube, Drive도 자동 연결 (같은 Google OAuth 토큰 공유)
+        await autoConnectGooglePlatforms(gmailConnectResult.email);
+        showConnectionNotification('Google Account', gmailConnectResult.email);
+      }
+      return gmailConnectResult;
     
     case 'disconnectGmail':
       return await self.GmailManager.disconnectGmail();
@@ -205,7 +212,13 @@ async function handleMessage(message) {
       return await self.YouTubeManager.getYouTubeStatus();
     
     case 'connectYouTube':
-      return await self.YouTubeManager.connectYouTube();
+      const ytConnectResult = await self.YouTubeManager.connectYouTube();
+      if (ytConnectResult.success) {
+        // YouTube 연결 시 Gmail, Drive도 자동 연결 (같은 Google OAuth 토큰 공유)
+        await autoConnectGooglePlatforms(ytConnectResult.email);
+        showConnectionNotification('Google Account', ytConnectResult.email);
+      }
+      return ytConnectResult;
     
     case 'disconnectYouTube':
       return await self.YouTubeManager.disconnectYouTube();
@@ -237,6 +250,28 @@ async function handleMessage(message) {
     
     case 'markGitHubAllRead':
       return await self.GitHubManager.markAllAsRead();
+    
+    // ===== Google Drive 관련 =====
+    case 'getDriveStatus':
+      return await self.DriveManager.getDriveStatus();
+    
+    case 'connectDrive':
+      const driveConnectResult = await self.DriveManager.connectDrive();
+      if (driveConnectResult.success) {
+        // Drive 연결 시 Gmail, YouTube도 자동 연결 (같은 Google OAuth 토큰 공유)
+        await autoConnectGooglePlatforms(driveConnectResult.email);
+        showConnectionNotification('Google Account', driveConnectResult.email);
+      }
+      return driveConnectResult;
+    
+    case 'disconnectDrive':
+      return await self.DriveManager.disconnectDrive();
+    
+    case 'checkDriveFiles':
+      return await self.DriveManager.checkNewFiles();
+    
+    case 'markDriveAsSeen':
+      return await self.DriveManager.markFilesAsSeen();
     
     // ===== Reddit 관련 =====
     case 'getRedditStatus':
@@ -496,6 +531,95 @@ async function checkSingleSiteByIndex(index) {
   }
 }
 
+// Google 플랫폼 자동 연결 (Gmail, YouTube, Drive는 같은 OAuth 토큰 사용)
+async function autoConnectGooglePlatforms(email) {
+  try {
+    // 현재 토큰 가져오기
+    const token = await new Promise((resolve) => {
+      chrome.identity.getAuthToken({ interactive: false }, (token) => {
+        resolve(token || null);
+      });
+    });
+    
+    if (!token) {
+      console.log('[AutoConnect] No token available');
+      return;
+    }
+    
+    const now = new Date().toISOString();
+    
+    // Gmail 연결 상태 확인 및 설정
+    const { gmail_connection } = await chrome.storage.local.get('gmail_connection');
+    if (!gmail_connection) {
+      await chrome.storage.local.set({
+        gmail_connection: {
+          accessToken: token,
+          email: email,
+          connectedAt: now,
+          lastCheck: null,
+          seenMessageIds: [],
+          hasModifyScope: true
+        }
+      });
+      console.log('[AutoConnect] Gmail auto-connected');
+    }
+    
+    // YouTube 연결 상태 확인 및 설정
+    const { youtube_connection } = await chrome.storage.local.get('youtube_connection');
+    if (!youtube_connection) {
+      await chrome.storage.local.set({
+        youtube_connection: {
+          accessToken: token,
+          email: email,
+          connectedAt: now,
+          lastCheck: null,
+          seenVideoIds: []
+        }
+      });
+      console.log('[AutoConnect] YouTube auto-connected');
+    }
+    
+    // Drive 연결 상태 확인 및 설정
+    const { drive_connection } = await chrome.storage.local.get('drive_connection');
+    if (!drive_connection) {
+      await chrome.storage.local.set({
+        drive_connection: {
+          accessToken: token,
+          email: email,
+          connectedAt: now,
+          lastCheck: null,
+          seenFileIds: []
+        }
+      });
+      console.log('[AutoConnect] Drive auto-connected');
+    }
+    
+    console.log('[AutoConnect] All Google platforms connected:', email);
+  } catch (error) {
+    console.error('[AutoConnect] Error:', error);
+  }
+}
+
+// 플랫폼 연결 성공 알림 표시
+function showConnectionNotification(platformName, email) {
+  const notificationId = `connection-${platformName}-${Date.now()}`;
+  
+  chrome.notifications.create(notificationId, {
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: `${platformName} Connected! ✓`,
+    message: email 
+      ? `Connected as ${email}\nReopen popup to continue.`
+      : 'Reopen popup to continue.',
+    priority: 2
+  });
+  
+  // 5초 후 자동으로 알림 닫기
+  setTimeout(() => {
+    chrome.notifications.clear(notificationId);
+  }, 5000);
+}
+
 // 스토리지에서 총 새 글 수 계산하여 뱃지 업데이트 (사이트 + 플랫폼 + RSS)
 async function updateBadgeFromStorage() {
   const { siteStates = {} } = await chrome.storage.local.get('siteStates');
@@ -694,6 +818,7 @@ async function checkAllPlatforms() {
     gmail: { count: 0, items: [] },
     youtube: { count: 0, items: [] },
     github: { count: 0, items: [] },
+    drive: { count: 0, items: [] },
     reddit: { count: 0, items: [] },
     discord: { count: 0, items: [] },
     totalCount: 0
@@ -739,6 +864,20 @@ async function checkAllPlatforms() {
     }
   } catch (error) {
     console.error('GitHub check failed:', error);
+  }
+  
+  // Google Drive 체크
+  try {
+    const driveStatus = await self.DriveManager.getDriveStatus();
+    if (driveStatus.connected) {
+      const driveResult = await self.DriveManager.checkNewFiles();
+      results.drive.count = driveResult.count || 0;
+      results.drive.items = driveResult.items || [];
+      results.totalCount += results.drive.count;
+      await updatePlatformState('drive', results.drive.count, results.drive.items);
+    }
+  } catch (error) {
+    console.error('Google Drive check failed:', error);
   }
   
   // Reddit 체크
