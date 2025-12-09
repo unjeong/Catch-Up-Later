@@ -1418,6 +1418,8 @@ async function showAllNewPostsDropdown() {
     // 링크 클릭 시 해당 항목만 읽음 처리
     dropdown.querySelectorAll('.dropdown-item').forEach(item => {
       item.addEventListener('click', async (e) => {
+        e.preventDefault(); // 기본 링크 동작 방지
+        
         const siteUrl = item.dataset.siteUrl;
         const platform = item.dataset.platform;
         const feedId = item.dataset.feedId;
@@ -1451,6 +1453,9 @@ async function showAllNewPostsDropdown() {
         await loadSites();
         await updatePlatformUI();
         await loadRSSFeeds();
+        
+        // 링크 열기 (제거 완료 후)
+        chrome.tabs.create({ url: itemLink });
       });
     });
     
@@ -1624,11 +1629,13 @@ async function showNewPostsDropdown(index, badgeElement) {
     
     // 링크 클릭 시 해당 항목만 읽음 처리
     dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-      item.addEventListener('click', async () => {
+      item.addEventListener('click', async (e) => {
+        e.preventDefault(); // 기본 링크 동작 방지
+        
         const postLink = item.dataset.postLink;
         const postIdx = parseInt(item.dataset.postIdx);
         
-        // 해당 포스트만 제거
+        // 먼저 해당 포스트 제거
         await removePostFromSite(siteUrl, postLink);
         newPosts.splice(postIdx, 1);
         
@@ -1643,6 +1650,9 @@ async function showNewPostsDropdown(index, badgeElement) {
         
         await loadSites();
         await updateTotalCount();
+        
+        // 링크 열기 (제거 완료 후)
+        chrome.tabs.create({ url: postLink });
       });
     });
     
@@ -2114,6 +2124,8 @@ async function savePlatformsStatus() {
 // 플랫폼 상태 로드
 async function loadPlatformsStatus() {
   try {
+    console.log('[Popup] loadPlatformsStatus started');
+    
     const { platformsStatus: saved } = await chrome.storage.local.get('platformsStatus');
     if (saved) {
       platformsStatus = { ...platformsStatus, ...saved };
@@ -2122,18 +2134,21 @@ async function loadPlatformsStatus() {
     // 실제 연결 상태 확인
     // Gmail 실제 연결 상태 확인
     const gmailStatus = await chrome.runtime.sendMessage({ action: 'getGmailStatus' });
+    console.log('[Popup] Gmail status:', gmailStatus);
     if (gmailStatus) {
       platformsStatus.gmail.connected = gmailStatus.connected;
     }
     
     // YouTube 실제 연결 상태 확인
     const youtubeStatus = await chrome.runtime.sendMessage({ action: 'getYouTubeStatus' });
+    console.log('[Popup] YouTube status:', youtubeStatus);
     if (youtubeStatus) {
       platformsStatus.youtube.connected = youtubeStatus.connected;
     }
     
     // GitHub 실제 연결 상태 확인
     const githubStatus = await chrome.runtime.sendMessage({ action: 'getGitHubStatus' });
+    console.log('[Popup] GitHub status:', githubStatus);
     if (githubStatus) {
       platformsStatus.github.connected = githubStatus.connected;
       if (githubStatus.username) {
@@ -2143,6 +2158,7 @@ async function loadPlatformsStatus() {
     
     // Google Drive 실제 연결 상태 확인
     const driveStatus = await chrome.runtime.sendMessage({ action: 'getDriveStatus' });
+    console.log('[Popup] Drive status:', driveStatus);
     if (driveStatus) {
       platformsStatus.drive.connected = driveStatus.connected;
       if (driveStatus.email) {
@@ -2167,6 +2183,12 @@ async function loadPlatformsStatus() {
         platformsStatus.discord.username = discordStatus.username;
       }
     }
+    
+    console.log('[Popup] Final platformsStatus:', JSON.stringify({
+      gmail: platformsStatus.gmail.connected,
+      youtube: platformsStatus.youtube.connected,
+      drive: platformsStatus.drive.connected
+    }));
     
     await updatePlatformUI();
   } catch (error) {
@@ -2220,7 +2242,16 @@ async function updateMainPlatformsSection() {
 
 // 플랫폼 그리드 렌더링 (사이트/RSS와 동일한 스타일)
 function renderPlatformGrid() {
-  if (!elements.platformsGrid) return;
+  console.log('[Popup] renderPlatformGrid called');
+  console.log('[Popup] elements.platformsGrid exists:', !!elements.platformsGrid);
+  
+  if (!elements.platformsGrid) {
+    console.log('[Popup] ERROR: platformsGrid element not found!');
+    return;
+  }
+  
+  console.log('[Popup] MAIN_PLATFORMS:', MAIN_PLATFORMS);
+  console.log('[Popup] platformsStatus:', JSON.stringify(platformsStatus));
   
   const platformIcons = {
     gmail: `<img src="icons/gmail.png" width="16" height="16" alt="Gmail">`,
@@ -2240,8 +2271,13 @@ function renderPlatformGrid() {
     discord: 'Discord'
   };
   
-  // 메인 팝업에는 MAIN_PLATFORMS만 표시 (Gmail, YouTube, Drive)
-  const platforms = MAIN_PLATFORMS;
+  // 메인 팝업에 표시할 플랫폼:
+  // 1. MAIN_PLATFORMS (Gmail, YouTube, Drive)는 항상 표시
+  // 2. 그 외 플랫폼 (GitHub)는 연결된 경우에만 표시
+  // 참고: Reddit, Discord는 현재 비활성화 (추후 활성화 예정)
+  const otherPlatforms = ['github']; // 'reddit', 'discord' 추후 추가
+  const connectedOthers = otherPlatforms.filter(p => platformsStatus[p]?.connected);
+  const platforms = [...MAIN_PLATFORMS, ...connectedOthers];
   
   elements.platformsGrid.innerHTML = platforms.map(platform => {
     const status = platformsStatus[platform];
@@ -2399,13 +2435,23 @@ async function showPlatformItemsDropdown(platform) {
   document.body.classList.add('dropdown-open');
   
   function setupPlatformDropdownListeners() {
-    // 닫기 버튼
-    dropdown.querySelector('.dropdown-close').addEventListener('click', closeDropdown);
-    
-    // 개별 아이템 클릭 시 해당 항목만 제거
-    dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-      item.addEventListener('click', async () => {
+    // 이벤트 위임 방식으로 모든 클릭 처리 (스크롤 후에도 작동)
+    dropdown.addEventListener('click', async (e) => {
+      // 닫기 버튼
+      if (e.target.classList.contains('dropdown-close')) {
+        e.stopPropagation();
+        closeDropdown();
+        return;
+      }
+      
+      // 개별 아이템 클릭
+      const item = e.target.closest('.dropdown-item');
+      if (item) {
+        e.preventDefault();
+        e.stopPropagation();
+        
         const itemIdx = parseInt(item.dataset.itemIdx);
+        const itemLink = item.getAttribute('href');
         
         // 스토리지에서 해당 항목 제거
         const { platformsStatus: pStatus = {} } = await chrome.storage.local.get('platformsStatus');
@@ -2428,58 +2474,67 @@ async function showPlatformItemsDropdown(platform) {
           showToast('All caught up! 🎉', 'success');
         } else {
           dropdown.innerHTML = renderPlatformDropdown();
-          setupPlatformDropdownListeners();
+          // 이벤트 위임 방식이므로 다시 설정 불필요
         }
         
         await updatePlatformUI();
         await updateTotalCount();
-      });
-    });
-    
-    // 전체 읽음 처리
-    const markBtn = dropdown.querySelector('.btn-mark-platform-read');
-    markBtn.addEventListener('click', async () => {
-      // 버튼 비활성화 및 Processing 표시
-      const originalText = markBtn.textContent;
-      markBtn.textContent = 'Processing...';
-      markBtn.disabled = true;
-      markBtn.style.opacity = '0.6';
-      markBtn.style.cursor = 'not-allowed';
+        
+        // 링크 열기 (제거 완료 후)
+        if (itemLink) {
+          chrome.tabs.create({ url: itemLink });
+        }
+        return;
+      }
       
-      try {
-        console.log(`[Popup] Marking ${platform} as read...`);
+      // Mark All Read 버튼 클릭
+      const markBtn = e.target.closest('.btn-mark-platform-read');
+      if (markBtn) {
+        e.stopPropagation();
         
-        // 플랫폼별 "본 것"으로 표시 (Gmail 실제 읽음 처리 포함)
-        const result = await markPlatformAsSeen(platform);
+        // 버튼 비활성화 및 Processing 표시
+        const originalText = markBtn.textContent;
+        markBtn.textContent = 'Processing...';
+        markBtn.disabled = true;
+        markBtn.style.opacity = '0.6';
+        markBtn.style.cursor = 'not-allowed';
         
-        // Gmail에서 실패했으면 에러 메시지 표시
-        if (result && !result.success && platform === 'gmail') {
+        try {
+          console.log(`[Popup] Marking ${platform} as read...`);
+          
+          // 플랫폼별 "본 것"으로 표시 (Gmail 실제 읽음 처리 포함)
+          const result = await markPlatformAsSeen(platform);
+          
+          // Gmail에서 실패했으면 에러 메시지 표시
+          if (result && !result.success && platform === 'gmail') {
+            markBtn.textContent = originalText;
+            markBtn.disabled = false;
+            markBtn.style.opacity = '1';
+            markBtn.style.cursor = 'pointer';
+            showToast(result.error || 'Failed. Please reconnect Gmail.', 'error');
+            return;
+          }
+          
+          // 로컬 상태 초기화
+          await chrome.runtime.sendMessage({ action: 'markPlatformAsRead', platform });
+          platformsStatus[platform].count = 0;
+          platformsStatus[platform].items = [];
+          await savePlatformsStatus();
+          await updatePlatformUI();
+          await updateTotalCount();
+          closeDropdown();
+          showToast(`${platform.charAt(0).toUpperCase() + platform.slice(1)} marked as read`, 'success');
+          
+          console.log(`[Popup] ${platform} marked as read successfully`);
+        } catch (error) {
+          console.error(`[Popup] Error marking ${platform} as read:`, error);
           markBtn.textContent = originalText;
           markBtn.disabled = false;
           markBtn.style.opacity = '1';
           markBtn.style.cursor = 'pointer';
-          showToast(result.error || 'Failed. Please reconnect Gmail.', 'error');
-          return;
+          showToast('Failed to mark as read', 'error');
         }
-        
-        // 로컬 상태 초기화
-        await chrome.runtime.sendMessage({ action: 'markPlatformAsRead', platform });
-        platformsStatus[platform].count = 0;
-        platformsStatus[platform].items = [];
-        await savePlatformsStatus();
-        await updatePlatformUI();
-        await updateTotalCount();
-        closeDropdown();
-        showToast(`${platform.charAt(0).toUpperCase() + platform.slice(1)} marked as read`, 'success');
-        
-        console.log(`[Popup] ${platform} marked as read successfully`);
-      } catch (error) {
-        console.error(`[Popup] Error marking ${platform} as read:`, error);
-        markBtn.textContent = originalText;
-        markBtn.disabled = false;
-        markBtn.style.opacity = '1';
-        markBtn.style.cursor = 'pointer';
-        showToast('Failed to mark as read', 'error');
+        return;
       }
     });
   }
@@ -2835,24 +2890,34 @@ async function showRSSItemsDropdown(feedId) {
   }
   
   let rssItems = [...feed.newItems]; // 복사본 생성
+  const INITIAL_SHOW = 15; // 처음에 보여줄 개수
+  let showingAll = false;
   
   const dropdown = document.createElement('div');
   dropdown.className = 'new-posts-dropdown all-posts';
   
   function renderRSSDropdown() {
+    const itemsToShow = showingAll ? rssItems : rssItems.slice(0, INITIAL_SHOW);
+    const remainingCount = rssItems.length - INITIAL_SHOW;
+    
     return `
       <div class="dropdown-header">
         <span>📡 ${escapeHtml(feed.name)} (${rssItems.length})</span>
         <button class="dropdown-close">×</button>
       </div>
       <div class="dropdown-list">
-        ${rssItems.map((item, idx) => `
+        ${itemsToShow.map((item, idx) => `
           <a href="${item.link}" class="dropdown-item" target="_blank" data-item-idx="${idx}" data-item-link="${item.link}">
             <span class="post-title">${escapeHtml(item.title)}</span>
             ${item.author ? `<span class="post-date">${escapeHtml(item.author)}</span>` : ''}
           </a>
         `).join('')}
       </div>
+      ${!showingAll && remainingCount > 0 ? `
+        <div class="dropdown-show-more-container">
+          <button class="dropdown-show-more">Show ${remainingCount} more</button>
+        </div>
+      ` : ''}
       <div class="dropdown-footer">
         <button class="btn-mark-all-read" data-feed-id="${feedId}">Mark All Read</button>
       </div>
@@ -2869,13 +2934,27 @@ async function showRSSItemsDropdown(feedId) {
     // 닫기 버튼
     dropdown.querySelector('.dropdown-close').addEventListener('click', closeDropdown);
     
+    // Show more 버튼
+    const showMoreBtn = dropdown.querySelector('.dropdown-show-more');
+    if (showMoreBtn) {
+      showMoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        showingAll = true;
+        dropdown.innerHTML = renderRSSDropdown();
+        setupRSSDropdownListeners();
+      });
+    }
+    
     // 개별 아이템 클릭 시 해당 항목만 제거
     dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-      item.addEventListener('click', async () => {
+      item.addEventListener('click', async (e) => {
+        e.preventDefault(); // 기본 링크 동작 방지
+        
         const itemIdx = parseInt(item.dataset.itemIdx);
         const itemLink = item.dataset.itemLink;
         
-        // 스토리지에서 해당 항목 제거
+        // 먼저 스토리지에서 해당 항목 제거
         await removeItemFromRSSFeed(feedId, itemLink);
         rssItems.splice(itemIdx, 1);
         
@@ -2890,6 +2969,9 @@ async function showRSSItemsDropdown(feedId) {
         
         await loadRSSFeeds();
         await updateTotalCount();
+        
+        // 링크 열기 (제거 완료 후)
+        chrome.tabs.create({ url: itemLink });
       });
     });
     

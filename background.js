@@ -173,9 +173,12 @@ async function handleMessage(message) {
     case 'connectGmail':
       const gmailConnectResult = await self.GmailManager.connectGmail();
       if (gmailConnectResult.success) {
-        // Gmail 연결 시 YouTube, Drive도 자동 연결 (같은 Google OAuth 토큰 공유)
-        await autoConnectGooglePlatforms(gmailConnectResult.email);
-        showConnectionNotification('Google Account', gmailConnectResult.email);
+        // 실제 부여된 스코프에 따라 플랫폼 연결 (토큰 직접 전달)
+        const autoResult = await autoConnectGooglePlatforms(gmailConnectResult.email, gmailConnectResult.token);
+        const platforms = autoResult?.connectedPlatforms?.join(', ') || 'None';
+        if (platforms !== 'None') {
+          showConnectionNotification(platforms, gmailConnectResult.email);
+        }
       }
       return gmailConnectResult;
     
@@ -214,9 +217,12 @@ async function handleMessage(message) {
     case 'connectYouTube':
       const ytConnectResult = await self.YouTubeManager.connectYouTube();
       if (ytConnectResult.success) {
-        // YouTube 연결 시 Gmail, Drive도 자동 연결 (같은 Google OAuth 토큰 공유)
-        await autoConnectGooglePlatforms(ytConnectResult.email);
-        showConnectionNotification('Google Account', ytConnectResult.email);
+        // 실제 부여된 스코프에 따라 플랫폼 연결 (토큰 직접 전달)
+        const autoResult = await autoConnectGooglePlatforms(ytConnectResult.email, ytConnectResult.token);
+        const platforms = autoResult?.connectedPlatforms?.join(', ') || 'None';
+        if (platforms !== 'None') {
+          showConnectionNotification(platforms, ytConnectResult.email);
+        }
       }
       return ytConnectResult;
     
@@ -258,9 +264,12 @@ async function handleMessage(message) {
     case 'connectDrive':
       const driveConnectResult = await self.DriveManager.connectDrive();
       if (driveConnectResult.success) {
-        // Drive 연결 시 Gmail, YouTube도 자동 연결 (같은 Google OAuth 토큰 공유)
-        await autoConnectGooglePlatforms(driveConnectResult.email);
-        showConnectionNotification('Google Account', driveConnectResult.email);
+        // 실제 부여된 스코프에 따라 플랫폼 연결 (토큰 직접 전달)
+        const autoResult = await autoConnectGooglePlatforms(driveConnectResult.email, driveConnectResult.token);
+        const platforms = autoResult?.connectedPlatforms?.join(', ') || 'None';
+        if (platforms !== 'None') {
+          showConnectionNotification(platforms, driveConnectResult.email);
+        }
       }
       return driveConnectResult;
     
@@ -531,26 +540,67 @@ async function checkSingleSiteByIndex(index) {
   }
 }
 
-// Google 플랫폼 자동 연결 (Gmail, YouTube, Drive는 같은 OAuth 토큰 사용)
-async function autoConnectGooglePlatforms(email) {
+// Google 플랫폼 연결 관리 (실제 부여된 스코프에 따라 연결/해제)
+async function autoConnectGooglePlatforms(email, passedToken = null) {
   try {
-    // 현재 토큰 가져오기
-    const token = await new Promise((resolve) => {
-      chrome.identity.getAuthToken({ interactive: false }, (token) => {
-        resolve(token || null);
+    // 전달받은 토큰 사용, 없으면 새로 가져오기
+    let token = passedToken;
+    
+    if (!token) {
+      token = await new Promise((resolve) => {
+        chrome.identity.getAuthToken({ interactive: false }, (t) => {
+          resolve(t || null);
+        });
       });
-    });
+    }
     
     if (!token) {
       console.log('[AutoConnect] No token available');
-      return;
+      return { connectedPlatforms: [], email };
+    }
+    
+    console.log('[AutoConnect] Using token:', token.substring(0, 20) + '...');
+    
+    // 토큰 정보에서 실제 부여된 스코프 확인
+    let grantedScopes = [];
+    try {
+      const tokenInfoResponse = await fetch(
+        `https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${token}`
+      );
+      
+      console.log('[AutoConnect] Token info response status:', tokenInfoResponse.status);
+      
+      if (tokenInfoResponse.ok) {
+        const tokenInfo = await tokenInfoResponse.json();
+        grantedScopes = tokenInfo.scope ? tokenInfo.scope.split(' ') : [];
+        console.log('[AutoConnect] Granted scopes:', grantedScopes);
+        console.log('[AutoConnect] Scopes count:', grantedScopes.length);
+      } else {
+        const errorText = await tokenInfoResponse.text();
+        console.error('[AutoConnect] Token info error:', errorText);
+        return { connectedPlatforms: [], email };
+      }
+    } catch (e) {
+      console.error('[AutoConnect] Could not verify token scopes:', e);
+      return { connectedPlatforms: [], email };
     }
     
     const now = new Date().toISOString();
+    const connectedPlatforms = [];
     
-    // Gmail 연결 상태 확인 및 설정
-    const { gmail_connection } = await chrome.storage.local.get('gmail_connection');
-    if (!gmail_connection) {
+    // 각 스코프 개별 확인 (디버깅용)
+    console.log('[AutoConnect] Checking individual scopes...');
+    grantedScopes.forEach((s, i) => {
+      console.log(`[AutoConnect] Scope ${i}: ${s}`);
+    });
+    
+    // Gmail 스코프 확인
+    const hasGmailScope = grantedScopes.some(s => 
+      s.includes('gmail.modify') || s.includes('gmail.readonly') || s.includes('mail.google.com')
+    );
+    console.log('[AutoConnect] hasGmailScope:', hasGmailScope);
+    
+    if (hasGmailScope) {
       await chrome.storage.local.set({
         gmail_connection: {
           accessToken: token,
@@ -558,30 +608,45 @@ async function autoConnectGooglePlatforms(email) {
           connectedAt: now,
           lastCheck: null,
           seenMessageIds: [],
-          hasModifyScope: true
+          hasModifyScope: grantedScopes.some(s => s.includes('gmail.modify'))
         }
       });
-      console.log('[AutoConnect] Gmail auto-connected');
+      connectedPlatforms.push('Gmail');
+      console.log('[AutoConnect] Gmail connected (scope granted)');
+    } else {
+      console.log('[AutoConnect] Gmail scope NOT granted');
     }
     
-    // YouTube 연결 상태 확인 및 설정
-    const { youtube_connection } = await chrome.storage.local.get('youtube_connection');
-    if (!youtube_connection) {
+    // YouTube 스코프 확인
+    const hasYouTubeScope = grantedScopes.some(s => 
+      s.includes('youtube.readonly') || s.includes('youtube')
+    );
+    console.log('[AutoConnect] hasYouTubeScope:', hasYouTubeScope);
+    
+    if (hasYouTubeScope) {
       await chrome.storage.local.set({
         youtube_connection: {
           accessToken: token,
           email: email,
           connectedAt: now,
           lastCheck: null,
+          lastVideoIds: [],
           seenVideoIds: []
         }
       });
-      console.log('[AutoConnect] YouTube auto-connected');
+      connectedPlatforms.push('YouTube');
+      console.log('[AutoConnect] YouTube connected (scope granted)');
+    } else {
+      console.log('[AutoConnect] YouTube scope NOT granted');
     }
     
-    // Drive 연결 상태 확인 및 설정
-    const { drive_connection } = await chrome.storage.local.get('drive_connection');
-    if (!drive_connection) {
+    // Drive 스코프 확인
+    const hasDriveScope = grantedScopes.some(s => 
+      s.includes('drive.metadata.readonly') || s.includes('drive.readonly') || s.includes('drive')
+    );
+    console.log('[AutoConnect] hasDriveScope:', hasDriveScope);
+    
+    if (hasDriveScope) {
       await chrome.storage.local.set({
         drive_connection: {
           accessToken: token,
@@ -591,12 +656,18 @@ async function autoConnectGooglePlatforms(email) {
           seenFileIds: []
         }
       });
-      console.log('[AutoConnect] Drive auto-connected');
+      connectedPlatforms.push('Drive');
+      console.log('[AutoConnect] Drive connected (scope granted)');
+    } else {
+      console.log('[AutoConnect] Drive scope NOT granted');
     }
     
-    console.log('[AutoConnect] All Google platforms connected:', email);
+    console.log('[AutoConnect] Final connected platforms:', connectedPlatforms.join(', ') || 'None');
+    
+    return { connectedPlatforms, email };
   } catch (error) {
     console.error('[AutoConnect] Error:', error);
+    return { connectedPlatforms: [], email };
   }
 }
 

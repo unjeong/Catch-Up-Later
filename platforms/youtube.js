@@ -13,23 +13,33 @@ const YOUTUBE_STORAGE_KEY = 'youtube_connection';
  */
 async function getYouTubeStatus() {
   try {
+    console.log('[YouTube] getYouTubeStatus called');
     const { youtube_connection } = await chrome.storage.local.get(YOUTUBE_STORAGE_KEY);
     
+    console.log('[YouTube] youtube_connection exists:', !!youtube_connection);
+    
     if (!youtube_connection || !youtube_connection.accessToken) {
+      console.log('[YouTube] No connection or no accessToken');
       return { connected: false };
     }
     
+    console.log('[YouTube] Has accessToken, email:', youtube_connection.email);
+    
     // 토큰 유효성 확인
     const isValid = await validateYouTubeToken(youtube_connection.accessToken);
+    console.log('[YouTube] Token valid:', isValid);
     
     if (!isValid) {
       // 토큰 갱신 시도
+      console.log('[YouTube] Trying to refresh token...');
       const refreshed = await refreshYouTubeToken();
+      console.log('[YouTube] Token refreshed:', refreshed);
       if (!refreshed) {
         return { connected: false };
       }
     }
     
+    console.log('[YouTube] Returning connected: true');
     return {
       connected: true,
       email: youtube_connection.email,
@@ -63,10 +73,43 @@ async function validateYouTubeToken(accessToken) {
 
 /**
  * YouTube OAuth 연결 시작
+ * 주의: 이 함수는 토큰만 가져오고 연결 저장은 하지 않음
+ * autoConnectGooglePlatforms()가 스코프에 따라 연결을 저장함
  * @returns {Promise<{success: boolean, email?: string, channelTitle?: string, error?: string}>}
  */
 async function connectYouTube() {
   try {
+    console.log('[YouTube] Starting connection...');
+    
+    // 기존 캐시된 토큰 제거
+    const existingToken = await new Promise((resolve) => {
+      chrome.identity.getAuthToken({ interactive: false }, (token) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+        } else {
+          resolve(token);
+        }
+      });
+    });
+    
+    if (existingToken) {
+      console.log('[YouTube] Removing existing cached token...');
+      await new Promise((resolve) => {
+        chrome.identity.removeCachedAuthToken({ token: existingToken }, resolve);
+      });
+      
+      // 토큰 철회
+      try {
+        await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${existingToken}`);
+      } catch (e) {
+        console.log('[YouTube] Token revoke failed');
+      }
+    }
+    
+    // 모든 Google 플랫폼 연결 정보 클리어 (새로 선택하게)
+    await chrome.storage.local.remove(['gmail_connection', 'youtube_connection', 'drive_connection']);
+    console.log('[YouTube] Cleared all Google platform connections');
+    
     // Chrome Identity API를 사용한 OAuth
     const token = await new Promise((resolve, reject) => {
       chrome.identity.getAuthToken({ interactive: true }, (token) => {
@@ -82,29 +125,18 @@ async function connectYouTube() {
       return { success: false, error: 'Authentication failed' };
     }
     
+    console.log('[YouTube] Got token successfully');
+    
     // 사용자 정보 가져오기
     const userInfo = await getYouTubeUserInfo(token);
     
-    // 채널 정보 가져오기
-    const channelInfo = await getMyChannel(token);
+    console.log('[YouTube] User email:', userInfo.email);
     
-    // 연결 정보 저장
-    await chrome.storage.local.set({
-      [YOUTUBE_STORAGE_KEY]: {
-        accessToken: token,
-        email: userInfo.email,
-        channelId: channelInfo?.id || null,
-        channelTitle: channelInfo?.title || userInfo.email,
-        connectedAt: new Date().toISOString(),
-        lastCheck: null,
-        lastVideoIds: [] // 마지막으로 확인한 영상 ID들
-      }
-    });
-    
+    // 토큰과 이메일 반환 - 연결 저장은 autoConnectGooglePlatforms에서 처리
     return { 
       success: true, 
       email: userInfo.email,
-      channelTitle: channelInfo?.title || userInfo.email
+      token: token
     };
     
   } catch (error) {

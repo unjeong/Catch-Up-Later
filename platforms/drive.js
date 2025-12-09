@@ -13,23 +13,33 @@ self.DriveManager = {
    */
   async getDriveStatus() {
     try {
+      console.log('[Drive] getDriveStatus called');
       const { drive_connection } = await chrome.storage.local.get(DRIVE_STORAGE_KEY);
       
+      console.log('[Drive] drive_connection exists:', !!drive_connection);
+      
       if (!drive_connection || !drive_connection.accessToken) {
+        console.log('[Drive] No connection or no accessToken');
         return { connected: false };
       }
       
+      console.log('[Drive] Has accessToken, email:', drive_connection.email);
+      
       // 토큰 유효성 확인
       const isValid = await this.validateToken(drive_connection.accessToken);
+      console.log('[Drive] Token valid:', isValid);
       
       if (!isValid) {
         // 토큰 갱신 시도
+        console.log('[Drive] Trying to refresh token...');
         const refreshed = await this.refreshToken();
+        console.log('[Drive] Token refreshed:', refreshed);
         if (!refreshed) {
           return { connected: false };
         }
       }
       
+      console.log('[Drive] Returning connected: true');
       return {
         connected: true,
         email: drive_connection.email,
@@ -57,6 +67,8 @@ self.DriveManager = {
 
   /**
    * Google Drive OAuth 연결
+   * 주의: 이 함수는 토큰만 가져오고 연결 저장은 하지 않음
+   * autoConnectGooglePlatforms()가 스코프에 따라 연결을 저장함
    */
   async connectDrive() {
     try {
@@ -78,7 +90,18 @@ self.DriveManager = {
         await new Promise((resolve) => {
           chrome.identity.removeCachedAuthToken({ token: existingToken }, resolve);
         });
+        
+        // 토큰 철회
+        try {
+          await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${existingToken}`);
+        } catch (e) {
+          console.log('[Drive] Token revoke failed');
+        }
       }
+      
+      // 모든 Google 플랫폼 연결 정보 클리어 (새로 선택하게)
+      await chrome.storage.local.remove(['gmail_connection', 'youtube_connection', 'drive_connection']);
+      console.log('[Drive] Cleared all Google platform connections');
       
       // 새 토큰 요청
       const token = await new Promise((resolve, reject) => {
@@ -101,24 +124,10 @@ self.DriveManager = {
       // 사용자 정보 가져오기
       const userInfo = await this.getUserInfo(token);
       
-      // 현재 시간 기록 (이후 변경사항만 추적)
-      const startPageToken = await this.getStartPageToken(token);
+      console.log(`[Drive] User email: ${userInfo.email}`);
       
-      // 연결 정보 저장
-      await chrome.storage.local.set({
-        [DRIVE_STORAGE_KEY]: {
-          accessToken: token,
-          email: userInfo.email,
-          connectedAt: new Date().toISOString(),
-          lastCheck: null,
-          startPageToken: startPageToken,
-          seenFileIds: []
-        }
-      });
-      
-      console.log(`[Drive] Connected as ${userInfo.email}`);
-      
-      return { success: true, email: userInfo.email };
+      // 토큰과 이메일 반환 - 연결 저장은 autoConnectGooglePlatforms에서 처리
+      return { success: true, email: userInfo.email, token: token };
       
     } catch (error) {
       console.error('[Drive] Connection failed:', error);

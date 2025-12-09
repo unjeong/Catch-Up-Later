@@ -62,7 +62,9 @@ async function validateGmailToken(accessToken) {
 
 /**
  * Gmail OAuth 연결 시작
- * @returns {Promise<{success: boolean, email?: string, error?: string}>}
+ * 주의: 이 함수는 토큰만 가져오고 연결 저장은 하지 않음
+ * autoConnectGooglePlatforms()가 스코프에 따라 연결을 저장함
+ * @returns {Promise<{success: boolean, email?: string, token?: string, error?: string}>}
  */
 async function connectGmail() {
   try {
@@ -97,8 +99,9 @@ async function connectGmail() {
       }
     }
     
-    // 2. 로컬 저장소도 클리어
-    await chrome.storage.local.remove(GMAIL_STORAGE_KEY);
+    // 2. 모든 Google 플랫폼 연결 정보 클리어 (새로 선택하게)
+    await chrome.storage.local.remove(['gmail_connection', 'youtube_connection', 'drive_connection']);
+    console.log('[Gmail] Cleared all Google platform connections');
     
     console.log('[Gmail] Requesting new token with interactive login...');
     
@@ -123,49 +126,10 @@ async function connectGmail() {
     // 사용자 정보 가져오기
     const userInfo = await getGmailUserInfo(token);
     
-    // 토큰 스코프 확인
-    let hasModifyScope = false;
-    try {
-      const tokenInfoResponse = await fetch(
-        `https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${token}`
-      );
-      if (tokenInfoResponse.ok) {
-        const tokenInfo = await tokenInfoResponse.json();
-        console.log('[Gmail] Token scopes:', tokenInfo.scope);
-        hasModifyScope = tokenInfo.scope && tokenInfo.scope.includes('gmail.modify');
-        
-        if (!hasModifyScope) {
-          console.warn('[Gmail] WARNING: Token does not have gmail.modify scope!');
-          console.warn('[Gmail] Available scopes:', tokenInfo.scope);
-        }
-      }
-    } catch (e) {
-      console.log('[Gmail] Could not verify token scopes');
-    }
+    console.log('[Gmail] User email:', userInfo.email);
     
-    // 연결 정보 저장
-    await chrome.storage.local.set({
-      [GMAIL_STORAGE_KEY]: {
-        accessToken: token,
-        email: userInfo.email,
-        connectedAt: new Date().toISOString(),
-        lastCheck: null,
-        seenMessageIds: [], // 이미 본 메시지 ID 목록
-        hasModifyScope: hasModifyScope
-      }
-    });
-    
-    console.log('[Gmail] Connected successfully:', userInfo.email);
-    
-    if (!hasModifyScope) {
-      return { 
-        success: true, 
-        email: userInfo.email,
-        warning: 'Mark as read may not work. Please revoke app access in Google Account settings and reconnect.'
-      };
-    }
-    
-    return { success: true, email: userInfo.email };
+    // 토큰과 이메일만 반환 - 연결 저장은 autoConnectGooglePlatforms에서 처리
+    return { success: true, email: userInfo.email, token: token };
     
   } catch (error) {
     console.error('Gmail connection failed:', error);
