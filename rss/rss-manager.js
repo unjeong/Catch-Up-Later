@@ -115,21 +115,31 @@ const RSSManager = {
       const states = await this.getFeedStates();
       const state = states[feedId] || { lastItemGuids: [], newCount: 0, newItems: [] };
       
-      // Find new items
+      // Find new items (현재 lastItemGuids에 없는 것들)
       const oldGuids = new Set(state.lastItemGuids);
       const newItems = items.filter(item => !oldGuids.has(item.guid));
+      
+      // 기존 newItems에 없는 것만 추가 (중복 제거)
+      const existingNewGuids = new Set((state.newItems || []).map(i => i.link));
+      const uniqueNewItems = newItems.filter(item => !existingNewGuids.has(item.link));
+      
+      const updatedNewItems = [
+        ...(state.newItems || []),
+        ...uniqueNewItems.slice(0, 20).map(item => ({
+          title: item.title,
+          link: item.link,
+          pubDate: item.pubDate || null,
+          author: item.author || ''
+        }))
+      ].slice(0, 50);
       
       // Update state
       states[feedId] = {
         lastCheck: new Date().toISOString(),
-        lastItemGuids: items.slice(0, 50).map(i => i.guid),
-        newCount: newItems.length,
-        newItems: newItems.slice(0, 20).map(item => ({
-          title: item.title,
-          link: item.link,
-          pubDate: item.pubDate || null,  // Already ISO string from parser
-          author: item.author || ''
-        }))
+        // 새 글이 있으면 lastItemGuids 업데이트하지 않음 (읽음 처리 시에만 업데이트)
+        lastItemGuids: newItems.length > 0 ? state.lastItemGuids : items.slice(0, 50).map(i => i.guid),
+        newCount: updatedNewItems.length,
+        newItems: updatedNewItems
       };
       
       await chrome.storage.local.set({ [this.STATE_KEY]: states });
@@ -180,6 +190,14 @@ const RSSManager = {
       const states = await this.getFeedStates();
       
       if (states[feedId]) {
+        // 읽음 처리: newItems의 guid를 lastItemGuids에 추가하여 다음 체크 시 "새 글"로 감지되지 않게 함
+        if (states[feedId].newItems && states[feedId].newItems.length > 0) {
+          const existingGuids = new Set(states[feedId].lastItemGuids || []);
+          const newGuids = states[feedId].newItems.map(item => item.link); // link를 guid로 사용
+          newGuids.forEach(guid => existingGuids.add(guid));
+          states[feedId].lastItemGuids = [...existingGuids].slice(0, 100);
+        }
+        
         states[feedId].newCount = 0;
         states[feedId].newItems = [];
         await chrome.storage.local.set({ [this.STATE_KEY]: states });

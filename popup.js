@@ -1028,6 +1028,14 @@ async function markSiteAsRead(index) {
     const state = siteStates[url];
     
     if (state && state.newCount > 0) {
+      // 읽음 처리: newPosts를 lastPosts에 병합하여 다음 체크 시 "새 글"로 감지되지 않게 함
+      if (state.newPosts && state.newPosts.length > 0) {
+        const existingPosts = state.lastPosts || [];
+        const existingLinks = new Set(existingPosts.map(p => p.link));
+        const uniqueNewPosts = state.newPosts.filter(p => !existingLinks.has(p.link));
+        state.lastPosts = [...uniqueNewPosts, ...existingPosts].slice(0, 50);
+      }
+      
       state.newCount = 0;
       state.newPosts = [];
       siteStates[url] = state;
@@ -1049,6 +1057,13 @@ async function removePostFromSite(siteUrl, postLink) {
   if (state && state.newPosts && state.newPosts.length > 0) {
     const postIndex = state.newPosts.findIndex(p => p.link === postLink);
     if (postIndex !== -1) {
+      // 제거할 포스트를 lastPosts에 추가하여 다음 체크 시 "새 글"로 감지되지 않게 함
+      const removedPost = state.newPosts[postIndex];
+      const existingPosts = state.lastPosts || [];
+      if (!existingPosts.some(p => p.link === removedPost.link)) {
+        state.lastPosts = [removedPost, ...existingPosts].slice(0, 50);
+      }
+      
       state.newPosts.splice(postIndex, 1);
       state.newCount = state.newPosts.length;
       siteStates[siteUrl] = state;
@@ -1114,6 +1129,12 @@ async function removeItemFromRSSFeed(feedId, itemLink) {
     const itemIndex = states[feedId].newItems.findIndex(i => i.link === itemLink);
     
     if (itemIndex !== -1) {
+      // 제거할 아이템의 link를 lastItemGuids에 추가하여 다음 체크 시 "새 글"로 감지되지 않게 함
+      const lastGuids = states[feedId].lastItemGuids || [];
+      if (!lastGuids.includes(itemLink)) {
+        states[feedId].lastItemGuids = [itemLink, ...lastGuids].slice(0, 100);
+      }
+      
       states[feedId].newItems.splice(itemIndex, 1);
       states[feedId].newCount = states[feedId].newItems.length;
       

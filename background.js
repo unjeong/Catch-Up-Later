@@ -507,17 +507,21 @@ async function checkSingleSiteByIndex(index) {
     siteState.status = 'active';
     
     if (result.hasNewPosts && result.newPosts.length > 0) {
-      siteState.newCount = result.newPosts.length;
-      siteState.newPosts = result.newPosts.slice(0, 50);
-  } else {
-      siteState.newCount = 0;
-      siteState.newPosts = [];
+      // 새 글이 있으면 기존 newPosts와 합침 (중복 제거)
+      const existingLinks = new Set((siteState.newPosts || []).map(p => p.link));
+      const uniqueNewPosts = result.newPosts.filter(p => !existingLinks.has(p.link));
+      siteState.newPosts = [...(siteState.newPosts || []), ...uniqueNewPosts].slice(0, 50);
+      siteState.newCount = siteState.newPosts.length;
+      // 새 글이 있을 때는 lastPosts/lastHash 업데이트하지 않음 (읽음 처리 시에만 업데이트)
+    } else {
+      // 새 글이 없을 때만 lastPosts/lastHash 업데이트
+      siteState.lastHash = result.hash;
+      siteState.lastPosts = result.posts;
+      // 기존 newPosts 유지 (사용자가 아직 안 읽었을 수 있음)
     }
     
     siteState.lastCheck = new Date().toISOString();
     siteState.lastCount = result.currentCount;
-    siteState.lastHash = result.hash;
-    siteState.lastPosts = result.posts;
     
     siteStates[site.url] = siteState;
     await chrome.storage.local.set({ siteStates });
