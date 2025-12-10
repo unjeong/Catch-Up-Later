@@ -1,46 +1,101 @@
-# 개인정보처리방침 (Privacy Policy)
+# Privacy Policy for Catch Up Later
 
-**게시글 알림 서비스** (이하 "확장 프로그램")의 개인정보처리방침입니다.
+**Last Updated: December 2024**
 
-## 수집하는 정보
+## Overview
 
-본 확장 프로그램은 다음 정보를 **로컬(사용자 브라우저)**에만 저장합니다:
+"Catch Up Later" is a Chrome extension that helps you monitor updates from various sources including websites, RSS feeds, and Google services (Gmail, YouTube, Google Drive).
 
-- 모니터링할 웹사이트 URL
-- CSS 선택자 설정
-- 이메일 알림 설정 (API 키, 수신 이메일)
-- 마지막 체크 시간 및 게시글 정보
+This Privacy Policy explains what information we collect, how we use it, and your rights regarding your data.
 
-## 정보의 사용
+## Information We Collect
 
-수집된 정보는 다음 목적으로만 사용됩니다:
+### 1. Google Account Data (Optional)
+When you choose to connect Google services, we access:
 
-- 등록된 웹사이트의 새 게시글 감지
-- 이메일 알림 발송 (Resend API 사용)
+- **Gmail**: Email metadata (sender, subject, date) for unread emails only. We do NOT read email content.
+- **YouTube**: Your subscription list and recent video metadata from subscribed channels.
+- **Google Drive**: Metadata of files shared with you (file name, sharing user, date).
+- **Account Email**: Your Google account email address for identification purposes.
 
-## 정보의 저장
+### 2. Website Monitoring Data
+- URLs of websites you choose to monitor
+- Post titles and links detected from those websites
+- CSS selectors for content detection
 
-- 모든 데이터는 **사용자의 브라우저에만 저장**됩니다 (Chrome Storage API)
-- 외부 서버로 데이터를 전송하지 않습니다
-- 이메일 발송 시 Resend API로 수신자 이메일만 전달됩니다
+### 3. RSS Feed Data
+- RSS feed URLs you subscribe to
+- Article titles and links from those feeds
 
-## 제3자 서비스
+### 4. Local Settings
+- Your notification preferences
+- Check time settings
+- Extension configuration
 
-본 확장 프로그램은 이메일 발송을 위해 [Resend](https://resend.com)를 사용합니다.
-Resend의 개인정보처리방침: https://resend.com/legal/privacy-policy
+## How We Use Your Information
 
-## 데이터 삭제
+All collected data is used **solely** to:
+- Display new updates from your selected sources
+- Send browser notifications when new content is detected
+- Remember your preferences and connected accounts
 
-확장 프로그램을 삭제하면 모든 저장된 데이터가 자동으로 삭제됩니다.
+## Data Storage & Security
 
-## 문의
+### Local Storage Only
+- **All your data is stored locally** in your browser using Chrome's Storage API
+- We do **NOT** operate any external servers
+- We do **NOT** collect, transmit, or store your data on any remote servers
+- Your data stays on your device
 
-개인정보 관련 문의사항이 있으시면 아래로 연락해주세요:
-- 이메일: [your-email@example.com]
+### Google API Usage
+- Google data is accessed directly from Google's servers to your browser
+- We use Google's official OAuth 2.0 for secure authentication
+- Access tokens are stored locally and used only to fetch your data
+- We follow Google API Services User Data Policy
 
-## 변경사항
+## Data Sharing
 
-본 개인정보처리방침은 필요에 따라 변경될 수 있습니다.
+We do **NOT** share your data with any third parties.
 
-마지막 업데이트: 2025년 11월
+The only external communications are:
+- Direct API calls to Google services (when you connect them)
+- Direct HTTP requests to websites/RSS feeds you choose to monitor
 
+## User Consent
+
+- **Google Services**: You must explicitly click "Connect" and approve access through Google's consent screen before we access any Google data.
+- **Websites/RSS**: You manually add each source you want to monitor.
+- You can disconnect services or remove sources at any time.
+
+## Data Retention
+
+- Data is retained only while the extension is installed
+- Uninstalling the extension removes all stored data
+- You can manually clear data by disconnecting services or removing monitored sites
+
+## Your Rights
+
+You have the right to:
+- **Access**: View all stored data in the extension settings
+- **Delete**: Remove any monitored site, RSS feed, or disconnect Google services
+- **Revoke**: Remove Google access at any time via https://myaccount.google.com/permissions
+
+## Children's Privacy
+
+This extension is not intended for children under 13. We do not knowingly collect information from children.
+
+## Changes to This Policy
+
+We may update this Privacy Policy from time to time. Changes will be reflected in the "Last Updated" date.
+
+## Contact Us
+
+If you have any questions about this Privacy Policy, please contact us at:
+- Email: catchuplater.ext@gmail.com
+
+## Compliance
+
+This extension complies with:
+- Chrome Web Store Developer Program Policies
+- Google API Services User Data Policy
+- General Data Protection Regulation (GDPR) principles

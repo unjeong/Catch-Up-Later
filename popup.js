@@ -1579,7 +1579,8 @@ async function showNewPostsDropdown(index, badgeElement) {
   const { siteStates = {} } = await chrome.storage.local.get('siteStates');
   
   const site = sites[index];
-  const state = site ? siteStates[site.url] : null;
+  const siteUrl = site ? site.url : null;
+  const state = site ? siteStates[siteUrl] : null;
   
   if (!state || !state.newPosts || state.newPosts.length === 0) {
     showToast('Cannot load posts list', 'error');

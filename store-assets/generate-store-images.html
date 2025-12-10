@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catch Up Later - Store Assets Generator</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f0f2f5;
+      padding: 40px;
+    }
+    
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    
+    .instructions {
+      text-align: center;
+      margin-bottom: 40px;
+      color: #666;
+      font-size: 14px;
+    }
+    
+    .asset-container {
+      margin-bottom: 60px;
+    }
+    
+    .asset-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 15px;
+      color: #333;
+    }
+    
+    .asset-size {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+    
+    /* ===== Screenshot 1: Main Screen ===== */
+    .screenshot-1 {
+      width: 1280px;
+      height: 800px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .screenshot-1::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 50%);
+      animation: none;
+    }
+    
+    .screenshot-content {
+      display: flex;
+      align-items: center;
+      gap: 60px;
+      z-index: 1;
+    }
+    
+    .mockup-phone {
+      background: #fff;
+      border-radius: 32px;
+      padding: 12px;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.1);
+      transform: perspective(1000px) rotateY(-5deg);
+    }
+    
+    .mockup-phone img {
+      width: 340px;
+      height: auto;
+      border-radius: 20px;
+      display: block;
+    }
+    
+    .feature-list {
+      color: white;
+      max-width: 500px;
+    }
+    
+    .feature-list h2 {
+      font-size: 42px;
+      font-weight: 800;
+      margin-bottom: 10px;
+      line-height: 1.1;
+    }
+    
+    .feature-list .tagline {
+      font-size: 20px;
+      opacity: 0.9;
+      margin-bottom: 35px;
+      font-weight: 400;
+    }
+    
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    
+    .feature-text h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .feature-text p {
+      font-size: 14px;
+      opacity: 0.85;
+      line-height: 1.4;
+    }
+    
+    /* ===== Screenshot 2: Dropdown ===== */
+    .screenshot-2 {
+      width: 1280px;
+      height: 800px;
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      position: relative;
+    }
+    
+    .screenshot-2 .mockup-phone {
+      transform: perspective(1000px) rotateY(5deg);
+    }
+    
+    .dropdown-features {
+      color: white;
+      max-width: 480px;
+    }
+    
+    .dropdown-features h2 {
+      font-size: 38px;
+      font-weight: 800;
+      margin-bottom: 15px;
+      line-height: 1.2;
+    }
+    
+    .dropdown-features .subtitle {
+      font-size: 18px;
+      opacity: 0.9;
+      margin-bottom: 35px;
+    }
+    
+    .action-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+      background: rgba(255,255,255,0.15);
+      padding: 16px 20px;
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+    }
+    
+    .action-number {
+      width: 36px;
+      height: 36px;
+      background: white;
+      color: #4facfe;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    
+    .action-text {
+      font-size: 16px;
+      font-weight: 500;
+    }
+    
+    /* ===== Screenshot 3: Settings ===== */
+    .screenshot-3 {
+      width: 1280px;
+      height: 800px;
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+    
+    .screenshot-3 .mockup-phone {
+      transform: perspective(1000px) rotateY(-5deg);
+    }
+    
+    .settings-features {
+      color: white;
+      max-width: 500px;
+    }
+    
+    .settings-features h2 {
+      font-size: 38px;
+      font-weight: 800;
+      margin-bottom: 15px;
+      line-height: 1.2;
+    }
+    
+    .settings-features .subtitle {
+      font-size: 18px;
+      opacity: 0.9;
+      margin-bottom: 35px;
+    }
+    
+    .settings-card {
+      background: rgba(255,255,255,0.15);
+      padding: 20px 24px;
+      border-radius: 16px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(10px);
+    }
+    
+    .settings-card h4 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .settings-card p {
+      font-size: 14px;
+      opacity: 0.85;
+      line-height: 1.4;
+    }
+    
+    /* ===== Promo Tile ===== */
+    .promo-tile {
+      width: 440px;
+      height: 280px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      text-align: center;
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .promo-tile::before {
+      content: '';
+      position: absolute;
+      top: -30%;
+      right: -30%;
+      width: 60%;
+      height: 60%;
+      background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+    }
+    
+    .promo-tile::after {
+      content: '';
+      position: absolute;
+      bottom: -30%;
+      left: -30%;
+      width: 60%;
+      height: 60%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    }
+    
+    .promo-content {
+      z-index: 1;
+    }
+    
+    .promo-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+    
+    .promo-title {
+      font-size: 28px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+    
+    .promo-subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+      line-height: 1.4;
+      max-width: 320px;
+    }
+    
+    /* Image placeholders */
+    .image-placeholder {
+      background: #e0e0e0;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      font-size: 14px;
+      text-align: center;
+    }
+    
+    .screenshot-1 .image-placeholder,
+    .screenshot-2 .image-placeholder,
+    .screenshot-3 .image-placeholder {
+      width: 340px;
+      height: 600px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔔 Catch Up Later - Store Assets</h1>
+  <p class="instructions">
+    각 이미지를 우클릭하여 저장하거나, 개발자 도구에서 스크린샷을 찍으세요.<br>
+    실제 스크린샷 이미지를 img 태그에 삽입하면 완성됩니다.
+  </p>
+
+  <!-- Screenshot 1: Main Screen -->
+  <div class="asset-container">
+    <div class="asset-title">📸 Screenshot 1: Main Screen</div>
+    <div class="asset-size">1280 x 800 px</div>
+    <div class="screenshot-1">
+      <div class="screenshot-content">
+        <div class="mockup-phone">
+          <!-- 여기에 메인 화면 스크린샷 이미지 삽입 -->
+          <div class="image-placeholder" style="width: 340px; height: 620px;">
+            📱<br>메인 화면<br>스크린샷 삽입
+          </div>
+        </div>
+        <div class="feature-list">
+          <h2>Catch Up Later</h2>
+          <p class="tagline">All your updates in one place</p>
+          
+          <div class="feature-item">
+            <div class="feature-icon">📧</div>
+            <div class="feature-text">
+              <h3>Gmail, YouTube, Drive</h3>
+              <p>Connect Google services with one click</p>
+            </div>
+          </div>
+          
+          <div class="feature-item">
+            <div class="feature-icon">🌐</div>
+            <div class="feature-text">
+              <h3>Any Website</h3>
+              <p>Track new posts from any webpage</p>
+            </div>
+          </div>
+          
+          <div class="feature-item">
+            <div class="feature-icon">📡</div>
+            <div class="feature-text">
+              <h3>RSS Feeds</h3>
+              <p>Subscribe to blogs, news & tech sites</p>
+            </div>
+          </div>
+          
+          <div class="feature-item">
+            <div class="feature-icon">🔄</div>
+            <div class="feature-text">
+              <h3>One-Click Refresh</h3>
+              <p>Check all updates when you're ready</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screenshot 2: Dropdown -->
+  <div class="asset-container">
+    <div class="asset-title">📸 Screenshot 2: Dropdown View</div>
+    <div class="asset-size">1280 x 800 px</div>
+    <div class="screenshot-2">
+      <div class="screenshot-content">
+        <div class="dropdown-features">
+          <h2>See What's New<br>At a Glance</h2>
+          <p class="subtitle">Click any item to view details instantly</p>
+          
+          <div class="action-item">
+            <div class="action-number">1</div>
+            <div class="action-text">Click badge to see new items</div>
+          </div>
+          
+          <div class="action-item">
+            <div class="action-number">2</div>
+            <div class="action-text">Click item to open & mark as read</div>
+          </div>
+          
+          <div class="action-item">
+            <div class="action-number">3</div>
+            <div class="action-text">"Mark All Read" to clear at once</div>
+          </div>
+          
+          <div class="action-item">
+            <div class="action-number">✓</div>
+            <div class="action-text">Stay focused, catch up on your time</div>
+          </div>
+        </div>
+        <div class="mockup-phone">
+          <!-- 여기에 드롭다운 화면 스크린샷 이미지 삽입 -->
+          <div class="image-placeholder" style="width: 340px; height: 400px;">
+            📋<br>드롭다운<br>스크린샷 삽입
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screenshot 3: Settings -->
+  <div class="asset-container">
+    <div class="asset-title">📸 Screenshot 3: Settings</div>
+    <div class="asset-size">1280 x 800 px</div>
+    <div class="screenshot-3">
+      <div class="screenshot-content">
+        <div class="mockup-phone">
+          <!-- 여기에 설정 화면 스크린샷 이미지 삽입 -->
+          <div class="image-placeholder" style="width: 340px; height: 620px;">
+            ⚙️<br>설정 화면<br>스크린샷 삽입
+          </div>
+        </div>
+        <div class="settings-features">
+          <h2>Take Full Control</h2>
+          <p class="subtitle">Customize your notification experience</p>
+          
+          <div class="settings-card">
+            <h4>⏰ Scheduled Checks</h4>
+            <p>Set your preferred time to receive daily update notifications</p>
+          </div>
+          
+          <div class="settings-card">
+            <h4>🔔 Smart Notifications</h4>
+            <p>Get browser alerts only when there's something new</p>
+          </div>
+          
+          <div class="settings-card">
+            <h4>🔗 Platform Connections</h4>
+            <p>Connect Gmail, YouTube, Drive with secure Google OAuth</p>
+          </div>
+          
+          <div class="settings-card">
+            <h4>⚡ GitHub Integration</h4>
+            <p>Track GitHub notifications for developers</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Promo Tile -->
+  <div class="asset-container">
+    <div class="asset-title">🏷️ Small Promotional Tile</div>
+    <div class="asset-size">440 x 280 px</div>
+    <div class="promo-tile">
+      <div class="promo-content">
+        <div class="promo-icon">🔔</div>
+        <div class="promo-title">Catch Up Later</div>
+        <p class="promo-subtitle">
+          Too many notifications?<br>
+          Check everything at once,<br>
+          only when you want to.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 이미지 다운로드 안내
+    console.log('=== Store Assets Generator ===');
+    console.log('1. 각 요소를 개발자 도구에서 선택');
+    console.log('2. 우클릭 → Capture node screenshot');
+    console.log('3. 또는 html2canvas 라이브러리 사용');
+  </script>
+</body>
+</html>
+
