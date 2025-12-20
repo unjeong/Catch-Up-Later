@@ -1,10 +1,10 @@
 # Privacy Policy for Catch Up Later
 
-**Last Updated: December 2024**
+**Last Updated: December 2025**
 
 ## Overview
 
-"Catch Up Later" is a Chrome extension that helps you monitor updates from various sources including websites, RSS feeds, and Google services (Gmail, YouTube, Google Drive).
+"Catch Up Later" is a Chrome extension that helps you monitor updates from various sources, including websites, RSS feeds, and Google services (Gmail, YouTube, Google Drive).
 
 This Privacy Policy explains what information we collect, how we use it, and your rights regarding your data.
 
