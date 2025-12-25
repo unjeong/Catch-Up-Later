@@ -15,7 +15,7 @@
   "host_permissions": [
     "<all_urls>"
   ],
-  "oauth2": {
+  "oauth2": { 
     "client_id": "567892047332-qnm4cqgb78l36e6ftbi0ts7rj4r9dkpv.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/userinfo.email",

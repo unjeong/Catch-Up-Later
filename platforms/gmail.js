@@ -182,6 +182,13 @@ async function disconnectGmail() {
  */
 async function refreshGmailToken() {
   try {
+    // 연결 해제 플래그 확인 (의도적으로 해제된 경우 갱신하지 않음)
+    const { google_disconnected } = await chrome.storage.local.get('google_disconnected');
+    if (google_disconnected) {
+      console.log('[Gmail] Token refresh blocked - user disconnected');
+      return false;
+    }
+    
     // 기존 토큰 제거
     const { gmail_connection } = await chrome.storage.local.get(GMAIL_STORAGE_KEY);
     if (gmail_connection?.accessToken) {

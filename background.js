@@ -604,26 +604,40 @@ async function disconnectAllGooglePlatforms() {
         chrome.identity.removeCachedAuthToken({ token: existingToken }, resolve);
       });
       
-      // Google 서버에서 토큰 철회
+      // Google 서버에서 토큰 철회 (POST 방식으로 더 확실하게)
       try {
-        await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${existingToken}`);
+        await fetch(`https://oauth2.googleapis.com/revoke?token=${existingToken}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
         console.log('[Background] Token revoked on Google servers');
       } catch (e) {
         console.log('[Background] Token revoke request sent');
       }
     }
     
-    // 2. 모든 Google 플랫폼 연결 정보 삭제
+    // 2. Chrome의 모든 캐시된 토큰 제거 (clearAllCachedAuthTokens 사용)
+    if (chrome.identity.clearAllCachedAuthTokens) {
+      await new Promise((resolve) => {
+        chrome.identity.clearAllCachedAuthTokens(resolve);
+      });
+      console.log('[Background] All cached auth tokens cleared');
+    }
+    
+    // 3. 모든 Google 플랫폼 연결 정보 삭제
     await chrome.storage.local.remove(['gmail_connection', 'youtube_connection', 'drive_connection']);
     
-    // 3. platformsStatus에서도 Google 플랫폼 초기화
+    // 4. Google 연결 해제 플래그 설정 (자동 재연결 방지)
+    await chrome.storage.local.set({ google_disconnected: true });
+    
+    // 5. platformsStatus에서도 Google 플랫폼 초기화
     const { platformsStatus = {} } = await chrome.storage.local.get('platformsStatus');
     platformsStatus.gmail = { connected: false, count: 0, items: [] };
     platformsStatus.youtube = { connected: false, count: 0, items: [] };
     platformsStatus.drive = { connected: false, count: 0, items: [] };
     await chrome.storage.local.set({ platformsStatus });
     
-    // 4. 뱃지 업데이트
+    // 6. 뱃지 업데이트
     await updateBadgeFromStorage();
     
     console.log('[Background] All Google platforms disconnected');
@@ -638,6 +652,9 @@ async function disconnectAllGooglePlatforms() {
 // Google 플랫폼 연결 관리 (실제 부여된 스코프에 따라 연결/해제)
 async function autoConnectGooglePlatforms(email, passedToken = null) {
   try {
+    // 연결 해제 플래그 해제 (새로 연결하는 것이므로)
+    await chrome.storage.local.remove('google_disconnected');
+    
     // 전달받은 토큰 사용, 없으면 새로 가져오기
     let token = passedToken;
     

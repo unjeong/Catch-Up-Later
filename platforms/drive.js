@@ -166,6 +166,13 @@ self.DriveManager = {
    */
   async refreshToken() {
     try {
+      // 연결 해제 플래그 확인 (의도적으로 해제된 경우 갱신하지 않음)
+      const { google_disconnected } = await chrome.storage.local.get('google_disconnected');
+      if (google_disconnected) {
+        console.log('[Drive] Token refresh blocked - user disconnected');
+        return false;
+      }
+      
       const token = await new Promise((resolve, reject) => {
         chrome.identity.getAuthToken({ interactive: false }, (token) => {
           if (chrome.runtime.lastError) {
@@ -237,10 +244,31 @@ self.DriveManager = {
       }
       
       const accessToken = drive_connection.accessToken;
-      const seenFileIds = new Set(drive_connection.seenFileIds || []);
+      let seenFileIds = new Set(drive_connection.seenFileIds || []);
+      
+      console.log('[Drive] checkNewFiles - seenFileIds count:', seenFileIds.size);
+      console.log('[Drive] checkNewFiles - lastCheck:', drive_connection.lastCheck);
       
       // 최근 공유된 파일 확인 (나에게 공유된 파일)
       const sharedFiles = await this.getRecentSharedFiles(accessToken);
+      console.log('[Drive] checkNewFiles - sharedFiles count:', sharedFiles.length);
+      
+      // 처음 연결 후 첫 체크인 경우 - 현재 파일들을 seen으로 처리 (초기화)
+      const isFirstCheck = seenFileIds.size === 0 && !drive_connection.lastCheck;
+      if (isFirstCheck && sharedFiles.length > 0) {
+        console.log('[Drive] First check - marking current files as seen');
+        sharedFiles.forEach(f => seenFileIds.add(f.id));
+        
+        // 첫 체크이므로 새 파일 없음으로 처리
+        drive_connection.lastCheck = new Date().toISOString();
+        drive_connection.lastFileIds = sharedFiles.map(f => f.id);
+        drive_connection.seenFileIds = Array.from(seenFileIds);
+        drive_connection.newFiles = [];
+        drive_connection.lastCount = 0;
+        await chrome.storage.local.set({ [DRIVE_STORAGE_KEY]: drive_connection });
+        
+        return { count: 0, items: [] };
+      }
       
       // 새 파일 필터링
       const newFiles = sharedFiles.filter(file => !seenFileIds.has(file.id));
@@ -281,13 +309,11 @@ self.DriveManager = {
    */
   async getRecentSharedFiles(accessToken) {
     try {
-      // 최근 7일 내 공유된 파일
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const dateQuery = sevenDaysAgo.toISOString();
-      
-      const query = encodeURIComponent(`sharedWithMe = true and sharedWithMeTime > '${dateQuery}'`);
+      // 나에게 공유된 파일 가져오기 (최근 50개)
+      const query = encodeURIComponent('sharedWithMe = true');
       const fields = 'files(id,name,mimeType,webViewLink,iconLink,sharedWithMeTime,sharingUser)';
+      
+      console.log('[Drive] Fetching shared files...');
       
       const response = await fetch(
         `${DRIVE_API_BASE}/files?q=${query}&fields=${fields}&orderBy=sharedWithMeTime desc&pageSize=50`,
@@ -297,12 +323,26 @@ self.DriveManager = {
       );
       
       if (!response.ok) {
-        console.error('[Drive] API error:', response.status);
+        const errorText = await response.text();
+        console.error('[Drive] API error:', response.status, errorText);
         return [];
       }
       
       const data = await response.json();
-      return data.files || [];
+      
+      // 클라이언트에서 최근 7일 이내 파일만 필터링
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const recentFiles = (data.files || []).filter(file => {
+        if (!file.sharedWithMeTime) return false;
+        const sharedDate = new Date(file.sharedWithMeTime);
+        return sharedDate > sevenDaysAgo;
+      });
+      
+      console.log('[Drive] API returned files:', data.files?.length || 0, ', recent (7 days):', recentFiles.length);
+      console.log('[Drive] Recent files:', recentFiles.map(f => f.name));
+      return recentFiles;
       
     } catch (error) {
       console.error('[Drive] Failed to get shared files:', error);

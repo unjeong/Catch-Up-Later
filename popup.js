@@ -1289,6 +1289,20 @@ async function showAllNewPostsDropdown() {
     });
   }
   
+  // Drive 아이템 추가
+  if (pStatus.drive && pStatus.drive.items && pStatus.drive.items.length > 0) {
+    pStatus.drive.items.forEach(item => {
+      const fileUrl = item.webViewLink || `https://drive.google.com/file/d/${item.id}/view`;
+      allNewItems.push({
+        title: `${item.emoji || '📄'} ${item.name}`,
+        link: fileUrl,
+        siteName: 'Google Drive',
+        platform: 'drive',
+        date: item.ownerName || item.sharedBy || ''
+      });
+    });
+  }
+  
   if (pStatus.github && pStatus.github.items && pStatus.github.items.length > 0) {
     pStatus.github.items.forEach(item => {
       const typeEmoji = {
@@ -1505,6 +1519,7 @@ async function showAllNewPostsDropdown() {
 async function markAllAsRead() {
   console.log('[Popup] markAllAsRead called');
   
+  let gmailSkipped = false;
   let hasError = false;
   let errorMessage = '';
   
@@ -1515,6 +1530,14 @@ async function markAllAsRead() {
   const platforms = ['gmail', 'youtube', 'drive', 'github', 'reddit', 'discord'];
   for (const platform of platforms) {
     if (platformsStatus[platform]?.connected && platformsStatus[platform]?.count > 0) {
+      
+      // Gmail read-only 모드 체크 - Gmail은 건너뛰기
+      if (platform === 'gmail' && !platformsStatus.gmail.hasModifyScope) {
+        console.log('[Popup] Gmail skipped (read-only mode)');
+        gmailSkipped = true;
+        continue; // Gmail 건너뛰기
+      }
+      
       console.log(`[Popup] Marking ${platform} as read...`);
       
       // 플랫폼별 "본 것"으로 표시
@@ -1525,6 +1548,7 @@ async function markAllAsRead() {
         console.error('[Popup] Gmail mark as read failed:', result.error);
         hasError = true;
         errorMessage = result.error || 'Gmail: Please reconnect to grant permissions';
+        continue; // Gmail 실패해도 다른 플랫폼 계속 처리
       }
       
       // 로컬 상태 초기화
@@ -1547,7 +1571,10 @@ async function markAllAsRead() {
   await updatePlatformUI();
   await updateTotalCount();
   
-  if (hasError) {
+  // 결과 메시지
+  if (gmailSkipped && platformsStatus.gmail.count > 0) {
+    showToast('Done! Gmail skipped (read-only mode)', 'warning');
+  } else if (hasError) {
     showToast(errorMessage, 'error');
   } else {
     showToast('All marked as read', 'success');
@@ -1700,9 +1727,23 @@ async function showNewPostsDropdown(index, badgeElement) {
 }
 
 function closeDropdown() {
+  console.log('[Popup] closeDropdown called, currentDropdown:', currentDropdown);
   if (currentDropdown) {
-    currentDropdown.remove();
+    try {
+      currentDropdown.remove();
+      console.log('[Popup] Dropdown removed successfully');
+    } catch (e) {
+      console.error('[Popup] Error removing dropdown:', e);
+    }
     currentDropdown = null;
+  } else {
+    console.log('[Popup] No currentDropdown to remove');
+    // currentDropdown이 없으면 직접 찾아서 제거
+    const existingDropdown = document.querySelector('.new-posts-dropdown');
+    if (existingDropdown) {
+      console.log('[Popup] Found dropdown by selector, removing');
+      existingDropdown.remove();
+    }
   }
   document.body.classList.remove('dropdown-open');
   document.removeEventListener('click', handleOutsideClick);
@@ -2183,6 +2224,7 @@ async function loadPlatformsStatus() {
     console.log('[Popup] Gmail status:', gmailStatus);
     if (gmailStatus) {
       platformsStatus.gmail.connected = gmailStatus.connected;
+      platformsStatus.gmail.hasModifyScope = gmailStatus.hasModifyScope !== false;
     }
     
     // YouTube 실제 연결 상태 확인
@@ -2462,10 +2504,19 @@ async function showPlatformItemsDropdown(platform) {
     const itemsToShow = showAll ? platformItems : platformItems.slice(0, INITIAL_SHOW);
     const remaining = platformItems.length - INITIAL_SHOW;
     
+    // Gmail이고 modify 권한이 없으면 버튼 비활성화 스타일
+    const isGmailReadOnly = platform === 'gmail' && !platformsStatus.gmail.hasModifyScope;
+    const markButtonClass = isGmailReadOnly 
+      ? 'btn-mark-all-read btn-mark-platform-read btn-disabled' 
+      : 'btn-mark-all-read btn-mark-platform-read';
+    const markButtonTitle = isGmailReadOnly 
+      ? 'Requires Gmail modify permission. Click to reconnect.' 
+      : 'Mark all as read';
+    
     return `
       <div class="dropdown-header">
         <span>${platformNames[platform]} (${platformItems.length})</span>
-        <button class="dropdown-close">×</button>
+        <button class="dropdown-close" type="button">×</button>
       </div>
       <div class="dropdown-list">
         ${renderPlatformItemsHtml(itemsToShow)}
@@ -2476,7 +2527,10 @@ async function showPlatformItemsDropdown(platform) {
         ` : ''}
       </div>
       <div class="dropdown-footer">
-        <button class="btn-mark-all-read btn-mark-platform-read" data-platform="${platform}">Mark All Read</button>
+        <button class="${markButtonClass}" data-platform="${platform}" title="${markButtonTitle}">
+          ${isGmailReadOnly ? '🔒 Mark All Read' : 'Mark All Read'}
+        </button>
+        ${isGmailReadOnly ? '<span class="readonly-hint">Read-only mode</span>' : ''}
       </div>
     `;
   }
@@ -2488,10 +2542,20 @@ async function showPlatformItemsDropdown(platform) {
   document.body.classList.add('dropdown-open');
   
   function setupPlatformDropdownListeners() {
+    // 닫기 버튼 - mousedown 이벤트 사용 (click보다 먼저 발생)
+    dropdown.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.dropdown-close')) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Popup] Close button mousedown');
+        closeDropdown();
+      }
+    });
+    
     // 이벤트 위임 방식으로 모든 클릭 처리 (스크롤 후에도 작동)
     dropdown.addEventListener('click', async (e) => {
-      // 닫기 버튼
-      if (e.target.classList.contains('dropdown-close')) {
+      // 닫기 버튼 (closest 사용하여 버튼 내부 클릭도 처리)
+      if (e.target.closest('.dropdown-close')) {
         e.stopPropagation();
         closeDropdown();
         return;
@@ -2552,6 +2616,26 @@ async function showPlatformItemsDropdown(platform) {
       const markBtn = e.target.closest('.btn-mark-platform-read');
       if (markBtn) {
         e.stopPropagation();
+        
+        // Gmail read-only 모드 체크 - 재연결 안내
+        if (platform === 'gmail' && !platformsStatus.gmail.hasModifyScope) {
+          const reconnect = confirm(
+            '🔒 Read-only Mode\n\n' +
+            'Gmail is connected with read-only permission.\n' +
+            'To mark emails as read, you need to reconnect with full permissions.\n\n' +
+            'Reconnect now?\n' +
+            '(Please check ALL permissions in the next popup)'
+          );
+          
+          if (reconnect) {
+            closeDropdown();
+            // 기존 연결 해제 후 다시 연결 (OAuth 팝업 띄우기)
+            await chrome.runtime.sendMessage({ action: 'disconnectAllGoogle' });
+            await loadPlatformsStatus();
+            await connectPlatform('gmail');
+          }
+          return;
+        }
         
         // 버튼 비활성화 및 Processing 표시
         const originalText = markBtn.textContent;

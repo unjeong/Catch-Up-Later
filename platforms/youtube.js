@@ -175,6 +175,13 @@ async function disconnectYouTube() {
  */
 async function refreshYouTubeToken() {
   try {
+    // 연결 해제 플래그 확인 (의도적으로 해제된 경우 갱신하지 않음)
+    const { google_disconnected } = await chrome.storage.local.get('google_disconnected');
+    if (google_disconnected) {
+      console.log('[YouTube] Token refresh blocked - user disconnected');
+      return false;
+    }
+    
     // 기존 토큰 제거
     const { youtube_connection } = await chrome.storage.local.get(YOUTUBE_STORAGE_KEY);
     if (youtube_connection?.accessToken) {
@@ -418,20 +425,20 @@ async function getSubscriptionVideos(maxChannels = 15) {
     
     console.log(`[YouTube] Got ${playlistMap.size} upload playlists`);
     
-    // 3. 각 채널의 최신 영상 가져오기 (최근 24시간 이내)
+    // 3. 각 채널의 최신 영상 가져오기 (최근 7일 이내)
     const allVideos = [];
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     
     for (const channel of channels) {
       const playlistId = playlistMap.get(channel.channelId);
       if (!playlistId) continue;
       
-      const videos = await getPlaylistVideos(accessToken, playlistId, 3);
+      const videos = await getPlaylistVideos(accessToken, playlistId, 5);
       
-      // 최근 24시간 이내 영상만 필터링
+      // 최근 7일 이내 영상만 필터링
       const recentVideos = videos.filter(v => {
         const publishedDate = new Date(v.publishedAt);
-        return publishedDate > oneDayAgo;
+        return publishedDate > sevenDaysAgo;
       });
       
       allVideos.push(...recentVideos);
@@ -476,7 +483,28 @@ async function checkNewVideos() {
     }
     
     // 이미 확인한 영상 ID 목록 (읽음 처리된 것들)
-    const seenVideoIds = new Set(youtube_connection.seenVideoIds || []);
+    let seenVideoIds = new Set(youtube_connection.seenVideoIds || []);
+    
+    // 처음 연결 후 첫 체크인 경우 - 현재 영상들을 seen으로 처리 (초기화)
+    const isFirstCheck = seenVideoIds.size === 0 && !youtube_connection.lastCheck;
+    if (isFirstCheck && videos.length > 0) {
+      console.log('[YouTube] First check - marking current videos as seen');
+      videos.forEach(v => seenVideoIds.add(v.id));
+      
+      // 첫 체크이므로 새 영상 없음으로 처리
+      await chrome.storage.local.set({
+        [YOUTUBE_STORAGE_KEY]: {
+          ...youtube_connection,
+          lastCheck: new Date().toISOString(),
+          lastVideoIds: videos.map(v => v.id),
+          seenVideoIds: Array.from(seenVideoIds),
+          lastCount: 0,
+          newVideos: []
+        }
+      });
+      
+      return { hasNew: false, count: 0, videos: [] };
+    }
     
     // 새로운 영상 필터링 (seen에 없는 것들)
     const newVideos = videos.filter(v => !seenVideoIds.has(v.id));
