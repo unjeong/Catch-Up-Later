@@ -374,9 +374,9 @@ async function checkNewEmails() {
     
     console.log(`[Gmail] Total unread: ${messages.length}`);
     
-    // 메시지 상세 정보 가져오기 (최대 10개)
+    // 메시지 상세 정보 가져오기 (최대 20개)
     const emailDetails = [];
-    for (const msg of messages.slice(0, 10)) {
+    for (const msg of messages.slice(0, 20)) {
       const details = await getEmailDetails(msg.id);
       if (details) {
         emailDetails.push(details);

@@ -237,31 +237,37 @@ self.DriveManager = {
       }
       
       const accessToken = drive_connection.accessToken;
-      const seenFileIds = drive_connection.seenFileIds || [];
+      const seenFileIds = new Set(drive_connection.seenFileIds || []);
       
       // 최근 공유된 파일 확인 (나에게 공유된 파일)
       const sharedFiles = await this.getRecentSharedFiles(accessToken);
       
       // 새 파일 필터링
-      const newFiles = sharedFiles.filter(file => !seenFileIds.includes(file.id));
+      const newFiles = sharedFiles.filter(file => !seenFileIds.has(file.id));
       
-      // 마지막 체크 시간 업데이트
+      // 새 파일 정보 구성
+      const newFileItems = newFiles.slice(0, 20).map(file => ({
+        id: file.id,
+        name: file.name,
+        mimeType: file.mimeType,
+        sharedBy: file.sharingUser?.displayName || 'Unknown',
+        sharedAt: file.sharedWithMeTime,
+        webViewLink: file.webViewLink,
+        iconLink: file.iconLink
+      }));
+      
+      // 마지막 체크 시간 및 새 파일 ID 저장
       drive_connection.lastCheck = new Date().toISOString();
+      drive_connection.lastFileIds = sharedFiles.map(f => f.id);
+      drive_connection.newFiles = newFileItems;
+      drive_connection.lastCount = newFiles.length;
       await chrome.storage.local.set({ [DRIVE_STORAGE_KEY]: drive_connection });
       
-      console.log(`[Drive] Found ${newFiles.length} new shared files`);
+      console.log(`[Drive] Found ${newFiles.length} new shared files (${seenFileIds.size} already seen)`);
       
       return {
         count: newFiles.length,
-        items: newFiles.slice(0, 20).map(file => ({
-          id: file.id,
-          name: file.name,
-          mimeType: file.mimeType,
-          sharedBy: file.sharingUser?.displayName || 'Unknown',
-          sharedAt: file.sharedWithMeTime,
-          webViewLink: file.webViewLink,
-          iconLink: file.iconLink
-        }))
+        items: newFileItems
       };
       
     } catch (error) {
@@ -315,27 +321,25 @@ self.DriveManager = {
         return { success: false, error: 'Not connected' };
       }
       
-      // 현재 새 파일 목록 가져오기
-      const { items } = await this.checkNewFiles();
+      // 저장된 lastFileIds를 seenFileIds에 추가 (API 재호출 없이)
+      const seenFileIds = new Set(drive_connection.seenFileIds || []);
+      const lastFileIds = drive_connection.lastFileIds || [];
       
-      // seen 목록에 추가
-      const seenFileIds = drive_connection.seenFileIds || [];
-      items.forEach(item => {
-        if (!seenFileIds.includes(item.id)) {
-          seenFileIds.push(item.id);
-        }
-      });
+      lastFileIds.forEach(id => seenFileIds.add(id));
       
-      // 최대 500개까지만 유지
-      if (seenFileIds.length > 500) {
-        seenFileIds.splice(0, seenFileIds.length - 500);
+      // Set을 배열로 변환하고 최대 500개까지만 유지
+      const seenArray = Array.from(seenFileIds);
+      if (seenArray.length > 500) {
+        seenArray.splice(0, seenArray.length - 500);
       }
       
-      drive_connection.seenFileIds = seenFileIds;
+      drive_connection.seenFileIds = seenArray;
+      drive_connection.newFiles = [];
+      drive_connection.lastCount = 0;
       await chrome.storage.local.set({ [DRIVE_STORAGE_KEY]: drive_connection });
       
-      console.log('[Drive] Marked files as seen');
-      return { success: true };
+      console.log(`[Drive] Marked ${lastFileIds.length} files as seen`);
+      return { success: true, markedCount: lastFileIds.length };
       
     } catch (error) {
       console.error('[Drive] Mark as seen failed:', error);

@@ -1362,7 +1362,7 @@ async function showAllNewPostsDropdown() {
   closeDropdown();
   
   // 드롭다운 생성
-  const INITIAL_SHOW = 20;
+  const INITIAL_SHOW = 5; // 초기에 보여줄 아이템 수
   let showingAll = false;
   
   const dropdown = document.createElement('div');
@@ -1588,7 +1588,7 @@ async function showNewPostsDropdown(index, badgeElement) {
   }
   
   // 드롭다운 생성
-  const INITIAL_SHOW = 15;
+  const INITIAL_SHOW = 5; // 초기에 보여줄 아이템 수
   const newPosts = state.newPosts;
   let showingAllPosts = false;
   
@@ -1817,6 +1817,9 @@ function setupPlatformEventListeners() {
 
 // 플랫폼 연결/해제 토글
 async function connectPlatform(platform) {
+  // Google 플랫폼 목록
+  const googlePlatforms = ['gmail', 'youtube', 'drive'];
+  
   // 이미 연결된 상태면 연결 해제 확인
   if (platformsStatus[platform]?.connected) {
     const platformNames = {
@@ -1828,7 +1831,15 @@ async function connectPlatform(platform) {
       discord: 'Discord'
     };
     
-    const confirmed = confirm(`Disconnect ${platformNames[platform]}?\n\nYou can reconnect anytime.`);
+    // Google 플랫폼인 경우 모든 Google 서비스가 해제됨을 알림
+    let confirmMessage;
+    if (googlePlatforms.includes(platform)) {
+      confirmMessage = `Disconnect Google Account?\n\nThis will disconnect Gmail, YouTube, and Drive.\nYou can reconnect anytime.`;
+    } else {
+      confirmMessage = `Disconnect ${platformNames[platform]}?\n\nYou can reconnect anytime.`;
+    }
+    
+    const confirmed = confirm(confirmMessage);
     
     if (confirmed) {
       await disconnectPlatform(platform);
@@ -1864,6 +1875,10 @@ async function connectPlatform(platform) {
 // 플랫폼 연결 해제
 async function disconnectPlatform(platform) {
   try {
+    // Google 플랫폼 목록
+    const googlePlatforms = ['gmail', 'youtube', 'drive'];
+    const isGooglePlatform = googlePlatforms.includes(platform);
+    
     let result;
     
     switch (platform) {
@@ -1891,20 +1906,29 @@ async function disconnectPlatform(platform) {
     }
     
     if (result.success) {
-      platformsStatus[platform].connected = false;
-      platformsStatus[platform].count = 0;
+      // Google 플랫폼인 경우 모든 Google 플랫폼 상태 초기화
+      if (isGooglePlatform) {
+        googlePlatforms.forEach(p => {
+          platformsStatus[p].connected = false;
+          platformsStatus[p].count = 0;
+          platformsStatus[p].items = [];
+        });
+        showToast('Google Account disconnected', 'success');
+      } else {
+        platformsStatus[platform].connected = false;
+        platformsStatus[platform].count = 0;
+        const platformNames = {
+          github: 'GitHub',
+          reddit: 'Reddit',
+          discord: 'Discord'
+        };
+        showToast(`${platformNames[platform]} disconnected`, 'success');
+      }
+      
       await savePlatformsStatus();
       await updatePlatformUI();
-      
-      const platformNames = {
-        gmail: 'Gmail',
-        youtube: 'YouTube',
-        drive: 'Drive',
-        github: 'GitHub',
-        reddit: 'Reddit',
-        discord: 'Discord'
-      };
-      showToast(`${platformNames[platform]} disconnected`, 'success');
+      await updateMainPlatformsSection();
+      await updateTotalCount();
     } else {
       showToast(result.error || 'Disconnect failed', 'error');
     }
@@ -2368,26 +2392,27 @@ async function showPlatformItemsDropdown(platform) {
   const dropdown = document.createElement('div');
   dropdown.className = 'new-posts-dropdown all-posts'; // 사이트와 동일한 스타일
   
-  let itemsHtml = '';
+  const INITIAL_SHOW = 5; // 초기에 보여줄 아이템 수
+  let showingAll = false;
   let platformItems = [...status.items]; // 복사본 생성
   
-  function renderPlatformItems() {
+  function renderPlatformItemsHtml(items) {
     if (platform === 'gmail') {
-      return platformItems.map((item, idx) => `
+      return items.map((item, idx) => `
         <a href="https://mail.google.com" class="dropdown-item" target="_blank" data-item-idx="${idx}">
           <span class="post-title">${escapeHtml(item.subject || item.from || 'New email')}</span>
           <span class="post-date">${item.from ? escapeHtml(item.from.split('<')[0].trim()) : ''}</span>
         </a>
       `).join('');
     } else if (platform === 'youtube') {
-      return platformItems.map((item, idx) => `
+      return items.map((item, idx) => `
         <a href="https://youtube.com/watch?v=${item.id}" class="dropdown-item" target="_blank" data-item-idx="${idx}">
           <span class="post-title">${escapeHtml(item.title)}</span>
           <span class="post-date">${escapeHtml(item.channelTitle || '')}</span>
         </a>
       `).join('');
     } else if (platform === 'drive') {
-      return platformItems.map((item, idx) => {
+      return items.map((item, idx) => {
         const fileEmoji = getFileEmoji(item.mimeType);
         return `
         <a href="${item.webViewLink || 'https://drive.google.com'}" class="dropdown-item" target="_blank" data-item-idx="${idx}">
@@ -2396,7 +2421,7 @@ async function showPlatformItemsDropdown(platform) {
         </a>
       `}).join('');
     } else if (platform === 'github') {
-      return platformItems.map((item, idx) => {
+      return items.map((item, idx) => {
         const typeEmoji = {
           'Issue': '🔴',
           'PullRequest': '🟢',
@@ -2416,14 +2441,14 @@ async function showPlatformItemsDropdown(platform) {
         `;
       }).join('');
     } else if (platform === 'reddit') {
-      return platformItems.map((item, idx) => `
+      return items.map((item, idx) => `
         <a href="${item.url || 'https://reddit.com/message/inbox'}" class="dropdown-item" target="_blank" data-item-idx="${idx}">
           <span class="post-title">${escapeHtml(item.title)}</span>
           <span class="post-date">u/${escapeHtml(item.author || '')} • r/${escapeHtml(item.subreddit || '')}</span>
         </a>
       `).join('');
     } else if (platform === 'discord') {
-      return platformItems.map((item, idx) => `
+      return items.map((item, idx) => `
         <a href="${item.url || 'https://discord.com'}" class="dropdown-item" target="_blank" data-item-idx="${idx}">
           <span class="post-title">${escapeHtml(item.content || 'New message')}</span>
           <span class="post-date">${escapeHtml(item.author || '')} • ${escapeHtml(item.guildName || '')}</span>
@@ -2433,16 +2458,22 @@ async function showPlatformItemsDropdown(platform) {
     return '';
   }
   
-  itemsHtml = renderPlatformItems();
-  
-  function renderPlatformDropdown() {
+  function renderPlatformDropdown(showAll = false) {
+    const itemsToShow = showAll ? platformItems : platformItems.slice(0, INITIAL_SHOW);
+    const remaining = platformItems.length - INITIAL_SHOW;
+    
     return `
       <div class="dropdown-header">
         <span>${platformNames[platform]} (${platformItems.length})</span>
         <button class="dropdown-close">×</button>
       </div>
       <div class="dropdown-list">
-        ${renderPlatformItems()}
+        ${renderPlatformItemsHtml(itemsToShow)}
+        ${!showAll && remaining > 0 ? `
+          <button class="dropdown-show-more">
+            Show ${remaining} more
+          </button>
+        ` : ''}
       </div>
       <div class="dropdown-footer">
         <button class="btn-mark-all-read btn-mark-platform-read" data-platform="${platform}">Mark All Read</button>
@@ -2450,7 +2481,7 @@ async function showPlatformItemsDropdown(platform) {
     `;
   }
   
-  dropdown.innerHTML = renderPlatformDropdown();
+  dropdown.innerHTML = renderPlatformDropdown(false);
   
   document.body.appendChild(dropdown);
   currentDropdown = dropdown;
@@ -2463,6 +2494,14 @@ async function showPlatformItemsDropdown(platform) {
       if (e.target.classList.contains('dropdown-close')) {
         e.stopPropagation();
         closeDropdown();
+        return;
+      }
+      
+      // "더 보기" 버튼 클릭
+      if (e.target.classList.contains('dropdown-show-more')) {
+        e.stopPropagation();
+        showingAll = true;
+        dropdown.innerHTML = renderPlatformDropdown(true);
         return;
       }
       
@@ -2495,7 +2534,7 @@ async function showPlatformItemsDropdown(platform) {
           closeDropdown();
           showToast('All caught up! 🎉', 'success');
         } else {
-          dropdown.innerHTML = renderPlatformDropdown();
+          dropdown.innerHTML = renderPlatformDropdown(showingAll);
           // 이벤트 위임 방식이므로 다시 설정 불필요
         }
         
@@ -2564,7 +2603,7 @@ async function showPlatformItemsDropdown(platform) {
   setupPlatformDropdownListeners();
   
   // 외부 클릭 시 닫기
-        setTimeout(() => {
+  setTimeout(() => {
     document.addEventListener('click', handleOutsideClick);
   }, 100);
 }
@@ -2649,14 +2688,15 @@ function setupMainRSSEvents() {
 // 플랫폼 칩에서 연결 해제 (메인 팝업)
 async function disconnectPlatformFromChip(platform) {
   try {
-    const platformNames = {
-      gmail: 'Gmail',
-      youtube: 'YouTube',
-      drive: 'Drive',
-      github: 'GitHub',
-      reddit: 'Reddit',
-      discord: 'Discord'
-    };
+    // Google 플랫폼 목록
+    const googlePlatforms = ['gmail', 'youtube', 'drive'];
+    const isGooglePlatform = googlePlatforms.includes(platform);
+    
+    // Google 플랫폼인 경우 확인 메시지 표시
+    if (isGooglePlatform) {
+      const confirmed = confirm('Disconnect Google Account?\n\nThis will disconnect Gmail, YouTube, and Drive.\nYou can reconnect anytime.');
+      if (!confirmed) return;
+    }
     
     // 액션 이름 매핑 (대소문자 정확히)
     const actionNames = {
@@ -2673,16 +2713,28 @@ async function disconnectPlatformFromChip(platform) {
     const result = await chrome.runtime.sendMessage({ action });
     
     if (result?.success) {
-      // UI 업데이트
-      platformsStatus[platform] = { connected: false, count: 0, items: [] };
-      savePlatformsStatus();
-      updateMainPlatformsSection();
-      updatePlatformUI();
-      updateTotalCount();
+      // Google 플랫폼인 경우 모든 Google 플랫폼 상태 초기화
+      if (isGooglePlatform) {
+        googlePlatforms.forEach(p => {
+          platformsStatus[p] = { connected: false, count: 0, items: [] };
+        });
+        showToast('Google Account disconnected', 'info');
+      } else {
+        platformsStatus[platform] = { connected: false, count: 0, items: [] };
+        const platformNames = {
+          github: 'GitHub',
+          reddit: 'Reddit',
+          discord: 'Discord'
+        };
+        showToast(`${platformNames[platform]} disconnected`, 'info');
+      }
       
-      showToast(`${platformNames[platform]} disconnected`, 'info');
+      await savePlatformsStatus();
+      await updateMainPlatformsSection();
+      await updatePlatformUI();
+      await updateTotalCount();
     } else {
-      showToast(`Failed to disconnect ${platformNames[platform]}`, 'error');
+      showToast('Failed to disconnect', 'error');
     }
   } catch (error) {
     console.error('Platform disconnect error:', error);
@@ -2912,7 +2964,7 @@ async function showRSSItemsDropdown(feedId) {
   }
   
   let rssItems = [...feed.newItems]; // 복사본 생성
-  const INITIAL_SHOW = 15; // 처음에 보여줄 개수
+  const INITIAL_SHOW = 5; // 초기에 보여줄 아이템 수
   let showingAll = false;
   
   const dropdown = document.createElement('div');

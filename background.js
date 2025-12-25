@@ -183,7 +183,10 @@ async function handleMessage(message) {
       return gmailConnectResult;
     
     case 'disconnectGmail':
-      return await self.GmailManager.disconnectGmail();
+      return await disconnectAllGooglePlatforms();
+    
+    case 'disconnectAllGoogle':
+      return await disconnectAllGooglePlatforms();
     
     case 'checkGmailEmails':
       return await self.GmailManager.checkNewEmails();
@@ -227,7 +230,7 @@ async function handleMessage(message) {
       return ytConnectResult;
     
     case 'disconnectYouTube':
-      return await self.YouTubeManager.disconnectYouTube();
+      return await disconnectAllGooglePlatforms();
     
     case 'checkYouTubeVideos':
       return await self.YouTubeManager.checkNewVideos();
@@ -237,6 +240,25 @@ async function handleMessage(message) {
     
     case 'getYouTubeSubscriptions':
       return await self.YouTubeManager.getSubscriptions(message.maxResults);
+    
+    case 'markYouTubeAsSeen':
+      console.log('[Background] markYouTubeAsSeen called');
+      const ytResult = await self.YouTubeManager.markVideosAsSeen();
+      console.log('[Background] markYouTubeAsSeen result:', ytResult);
+      
+      // 성공 시 platformsStatus도 초기화
+      if (ytResult.success) {
+        const { platformsStatus: ytpStatus = {} } = await chrome.storage.local.get('platformsStatus');
+        ytpStatus.youtube = {
+          ...ytpStatus.youtube,
+          count: 0,
+          items: []
+        };
+        await chrome.storage.local.set({ platformsStatus: ytpStatus });
+        await updateBadgeFromStorage();
+      }
+      
+      return ytResult;
     
     // ===== GitHub 관련 =====
     case 'getGitHubStatus':
@@ -274,13 +296,29 @@ async function handleMessage(message) {
       return driveConnectResult;
     
     case 'disconnectDrive':
-      return await self.DriveManager.disconnectDrive();
+      return await disconnectAllGooglePlatforms();
     
     case 'checkDriveFiles':
       return await self.DriveManager.checkNewFiles();
     
     case 'markDriveAsSeen':
-      return await self.DriveManager.markFilesAsSeen();
+      console.log('[Background] markDriveAsSeen called');
+      const driveResult = await self.DriveManager.markFilesAsSeen();
+      console.log('[Background] markDriveAsSeen result:', driveResult);
+      
+      // 성공 시 platformsStatus도 초기화
+      if (driveResult.success) {
+        const { platformsStatus: driveStatus = {} } = await chrome.storage.local.get('platformsStatus');
+        driveStatus.drive = {
+          ...driveStatus.drive,
+          count: 0,
+          items: []
+        };
+        await chrome.storage.local.set({ platformsStatus: driveStatus });
+        await updateBadgeFromStorage();
+      }
+      
+      return driveResult;
     
     // ===== Reddit 관련 =====
     case 'getRedditStatus':
@@ -541,6 +579,59 @@ async function checkSingleSiteByIndex(index) {
     siteStates[site.url] = siteState;
     await chrome.storage.local.set({ siteStates });
     return { success: false, error: error.message, newCount: 0 };
+  }
+}
+
+// 모든 Google 플랫폼 연결 해제 (Gmail, YouTube, Drive 공유 토큰)
+async function disconnectAllGooglePlatforms() {
+  try {
+    console.log('[Background] Disconnecting all Google platforms...');
+    
+    // 1. 기존 캐시된 토큰 가져오기
+    const existingToken = await new Promise((resolve) => {
+      chrome.identity.getAuthToken({ interactive: false }, (token) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+        } else {
+          resolve(token);
+        }
+      });
+    });
+    
+    if (existingToken) {
+      // Chrome 캐시에서 토큰 제거
+      await new Promise((resolve) => {
+        chrome.identity.removeCachedAuthToken({ token: existingToken }, resolve);
+      });
+      
+      // Google 서버에서 토큰 철회
+      try {
+        await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${existingToken}`);
+        console.log('[Background] Token revoked on Google servers');
+      } catch (e) {
+        console.log('[Background] Token revoke request sent');
+      }
+    }
+    
+    // 2. 모든 Google 플랫폼 연결 정보 삭제
+    await chrome.storage.local.remove(['gmail_connection', 'youtube_connection', 'drive_connection']);
+    
+    // 3. platformsStatus에서도 Google 플랫폼 초기화
+    const { platformsStatus = {} } = await chrome.storage.local.get('platformsStatus');
+    platformsStatus.gmail = { connected: false, count: 0, items: [] };
+    platformsStatus.youtube = { connected: false, count: 0, items: [] };
+    platformsStatus.drive = { connected: false, count: 0, items: [] };
+    await chrome.storage.local.set({ platformsStatus });
+    
+    // 4. 뱃지 업데이트
+    await updateBadgeFromStorage();
+    
+    console.log('[Background] All Google platforms disconnected');
+    return { success: true, disconnectedPlatforms: ['gmail', 'youtube', 'drive'] };
+    
+  } catch (error) {
+    console.error('[Background] Disconnect all Google platforms failed:', error);
+    return { success: false, error: error.message };
   }
 }
 

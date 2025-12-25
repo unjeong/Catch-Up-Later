@@ -455,6 +455,7 @@ async function getSubscriptionVideos(maxChannels = 15) {
 
 /**
  * 새 영상 체크 (마지막 체크 이후)
+ * seenVideoIds를 기준으로 새 영상을 필터링 (읽음 처리 전까지 유지)
  * @returns {Promise<{hasNew: boolean, count: number, videos: Array}>}
  */
 async function checkNewVideos() {
@@ -474,39 +475,77 @@ async function checkNewVideos() {
       return { hasNew: false, count: 0, videos: [], error };
     }
     
-    // 이전에 확인한 영상 ID 목록
-    const lastVideoIds = new Set(youtube_connection.lastVideoIds || []);
+    // 이미 확인한 영상 ID 목록 (읽음 처리된 것들)
+    const seenVideoIds = new Set(youtube_connection.seenVideoIds || []);
     
-    // 새로운 영상 필터링
-    let newVideos = videos;
+    // 새로운 영상 필터링 (seen에 없는 것들)
+    const newVideos = videos.filter(v => !seenVideoIds.has(v.id));
     
-    if (lastVideoIds.size > 0) {
-      newVideos = videos.filter(v => !lastVideoIds.has(v.id));
-    }
-    
-    // 현재 영상 ID 목록 저장
-    const currentVideoIds = videos.map(v => v.id);
-    
+    // 마지막 체크 시간만 업데이트 (seenVideoIds는 markAsSeen에서만 업데이트)
     await chrome.storage.local.set({
       [YOUTUBE_STORAGE_KEY]: {
         ...youtube_connection,
         lastCheck: new Date().toISOString(),
-        lastVideoIds: currentVideoIds,
-        lastCount: newVideos.length
+        lastVideoIds: videos.map(v => v.id),
+        lastCount: newVideos.length,
+        // 새 영상 목록 저장 (UI에서 표시용)
+        newVideos: newVideos.slice(0, 20)
       }
     });
     
-    console.log(`[YouTube] Found ${newVideos.length} new videos`);
+    console.log(`[YouTube] Found ${newVideos.length} new videos (${seenVideoIds.size} already seen)`);
     
     return {
       hasNew: newVideos.length > 0,
       count: newVideos.length,
-      videos: newVideos.slice(0, 10)
+      videos: newVideos.slice(0, 20)
     };
     
   } catch (error) {
     console.error('[YouTube] Check new videos failed:', error);
     return { hasNew: false, count: 0, videos: [], error: error.message };
+  }
+}
+
+/**
+ * YouTube 영상 읽음 처리
+ * @returns {Promise<{success: boolean}>}
+ */
+async function markVideosAsSeen() {
+  try {
+    const { youtube_connection } = await chrome.storage.local.get(YOUTUBE_STORAGE_KEY);
+    
+    if (!youtube_connection) {
+      return { success: false, error: 'Not connected' };
+    }
+    
+    // 현재 lastVideoIds를 seenVideoIds에 추가
+    const seenVideoIds = new Set(youtube_connection.seenVideoIds || []);
+    const lastVideoIds = youtube_connection.lastVideoIds || [];
+    
+    lastVideoIds.forEach(id => seenVideoIds.add(id));
+    
+    // 최대 200개까지만 유지 (오래된 것 제거)
+    const seenArray = Array.from(seenVideoIds);
+    if (seenArray.length > 200) {
+      seenArray.splice(0, seenArray.length - 200);
+    }
+    
+    await chrome.storage.local.set({
+      [YOUTUBE_STORAGE_KEY]: {
+        ...youtube_connection,
+        seenVideoIds: seenArray,
+        newVideos: [],
+        lastCount: 0
+      }
+    });
+    
+    console.log('[YouTube] Marked videos as seen');
+    return { success: true, markedCount: lastVideoIds.length };
+    
+  } catch (error) {
+    console.error('[YouTube] Mark as seen failed:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -545,6 +584,7 @@ if (typeof self !== 'undefined') {
     disconnectYouTube,
     getSubscriptionVideos,
     checkNewVideos,
-    getSubscriptions
+    getSubscriptions,
+    markVideosAsSeen
   };
 }
