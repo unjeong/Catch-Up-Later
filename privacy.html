@@ -29,6 +29,8 @@
             color: #202124;
             margin-top: 30px;
             font-size: 1.4em;
+            border-left: 4px solid #1a73e8;
+            padding-left: 10px;
         }
         h3 {
             color: #5f6368;
@@ -47,7 +49,14 @@
         .highlight-box {
             background-color: #e8f0fe;
             border-left: 5px solid #1a73e8;
-            padding: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .security-box {
+            background-color: #f1f8e9;
+            border-left: 5px solid #4caf50;
+            padding: 20px;
             margin: 20px 0;
             border-radius: 4px;
         }
@@ -76,115 +85,71 @@
 
     <div class="container">
         <h1>Privacy Policy for Catch Up Later</h1>
-        <p class="last-updated">Last Updated: December 2025</p>
+        <p class="last-updated">Last Updated: December 28, 2025</p>
 
         <h2>Overview</h2>
-        <p>"Catch Up Later" is a Chrome extension that helps you monitor updates from various sources, including websites, RSS feeds, and Google services (Gmail, YouTube, Google Drive). This Privacy Policy explains what information we collect, how we use it, and your rights regarding your data.</p>
+        <p><strong>Catch Up Later</strong> is a Chrome extension designed to help users efficiently monitor updates from Gmail, YouTube, Google Drive, RSS feeds, and websites. We value your privacy and are committed to protecting your sensitive data through strict security protocols and a "Client-Side Only" architecture.</p>
 
-        <h2>Information We Collect</h2>
-
-        <h3>1. Google Account Data (Optional)</h3>
-        <p>When you choose to connect Google services, we access:</p>
-        <ul>
-            <li><strong>Gmail:</strong> Email metadata (sender, subject, date) for unread emails only. We do <strong>NOT</strong> read email content.</li>
-            <li><strong>YouTube:</strong> Your subscription list and recent video metadata from subscribed channels.</li>
-            <li><strong>Google Drive:</strong> Metadata of files shared with you (file name, sharing user, date).</li>
-            <li><strong>Account Email:</strong> Your Google account email address for identification purposes.</li>
-        </ul>
-
-        <h3>2. Website Monitoring Data</h3>
-        <ul>
-            <li>URLs of websites you choose to monitor</li>
-            <li>Post titles and links detected from those websites</li>
-            <li>CSS selectors for content detection</li>
-        </ul>
-
-        <h3>3. RSS Feed Data</h3>
-        <ul>
-            <li>RSS feed URLs you subscribe to</li>
-            <li>Article titles and links from those feeds</li>
-        </ul>
-
-        <h3>4. Local Settings</h3>
-        <ul>
-            <li>Your notification preferences</li>
-            <li>Check time settings</li>
-            <li>Extension configuration</li>
-        </ul>
-
-        <h2>How We Use Your Information</h2>
-        <p>All collected data is used <strong>solely</strong> to:</p>
-        <ul>
-            <li>Display new updates from your selected sources</li>
-            <li>Send browser notifications when new content is detected</li>
-            <li>Remember your preferences and connected accounts</li>
-        </ul>
-
-        <h2>Data Storage & Security</h2>
-        
         <div class="highlight-box">
-            <h3>Local Storage Only</h3>
-            <p>All your data is stored locally <strong>in your browser using Chrome's Storage API</strong>.</p>
+            <h2>Google API Disclosure (Limited Use)</h2>
+            <p>Catch Up Later's use and transfer to any other app of information received from Google APIs will adhere to the <strong><a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank">Google API Services User Data Policy</a></strong>, including the <strong>Limited Use requirements</strong>.</p>
+            <p>Specifically, data accessed via Google APIs is used only to provide or improve user-facing features and is not used for advertising, serving ads, or any other purposes not explicitly authorized by the user.</p>
+        </div>
+
+        <h2>Information We Access</h2>
+
+        <h3>1. Google User Data (Sensitive Scopes)</h3>
+        <p>We only access data after you provide explicit consent via the Google OAuth 2.0 screen:</p>
+        <ul>
+            <li><strong>Gmail (https://www.googleapis.com/auth/gmail.modify & .readonly):</strong> We access email metadata (sender, subject, snippets) to show unread counts. We do <strong>NOT</strong> store your email content on any server.</li>
+            <li><strong>YouTube (https://www.googleapis.com/auth/youtube.readonly):</strong> We access your subscription list to notify you of new video uploads.</li>
+            <li><strong>Google Drive (https://www.googleapis.com/auth/drive.metadata.readonly):</strong> We access metadata of shared files to help you track recent updates.</li>
+        </ul>
+
+        <h3>2. Local Data</h3>
+        <ul>
+            <li>URLs of monitored websites and RSS feeds.</li>
+            <li>Extension configuration and notification preferences.</li>
+        </ul>
+
+        <h2>Data Security & Protection Mechanisms</h2>
+        <div class="security-box">
+            <p>To address the protection of sensitive data, Catch Up Later implements the following mechanisms:</p>
             <ul>
-                <li>We do <strong>NOT</strong> operate any external servers.</li>
-                <li>We do <strong>NOT</strong> collect, transmit, or store your data on any remote servers.</li>
-                <li>Your data stays on your device.</li>
+                <li><strong>Encryption in Transit:</strong> All communications between the extension and Google APIs are conducted exclusively over <strong>industry-standard HTTPS (TLS 1.2/1.3)</strong>, ensuring that data is encrypted while moving between your device and Google's servers.</li>
+                <li><strong>No External Server Storage:</strong> We do <strong>NOT</strong> maintain any external databases or servers. All sensitive authentication tokens and fetched metadata are stored <strong>locally in your browser's secure sandbox</strong> using the <code>chrome.storage.local</code> API.</li>
+                <li><strong>Sandboxed Environment:</strong> Chrome extensions run in an isolated environment, preventing other websites or applications from accessing the sensitive data managed by Catch Up Later.</li>
+                <li><strong>Human Access Restriction:</strong> Since no data is transmitted to us, no human at Catch Up Later can view, access, or process your personal Google information.</li>
             </ul>
         </div>
 
-        <h3>Google API Usage</h3>
+        <h2>How We Use Your Information</h2>
+        <p>Data usage is strictly limited to the following functional purposes:</p>
         <ul>
-            <li>Google data is accessed directly from Google's servers to your browser.</li>
-            <li>We use Google's official OAuth 2.0 for secure authentication.</li>
-            <li>Access tokens are stored locally and used only to fetch your data.</li>
-            <li>We follow the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank">Google API Services User Data Policy</a>.</li>
+            <li>Displaying a unified dashboard of your unread updates.</li>
+            <li>Generating local browser notifications for new content.</li>
+            <li>Providing a one-click "Mark as Read" feature for Gmail.</li>
         </ul>
 
         <h2>Data Sharing</h2>
-        <p>We do <strong>NOT</strong> share your data with any third parties.</p>
-        <p>The only external communications are:</p>
-        <ul>
-            <li>Direct API calls to Google services (when you connect them)</li>
-            <li>Direct HTTP requests to websites/RSS feeds you choose to monitor</li>
-        </ul>
+        <p><strong>We do NOT share, sell, or rent your personal data to any third parties.</strong> Data is never used for marketing, advertising, or creditworthiness assessments. Your information only moves between your browser and the official Google API endpoints.</p>
 
-        <h2>User Consent</h2>
+        <h2>Data Retention & Deletion</h2>
         <ul>
-            <li><strong>Google Services:</strong> You must explicitly click "Connect" and approve access through Google's consent screen before we access any Google data.</li>
-            <li><strong>Websites/RSS:</strong> You manually add each source you want to monitor.</li>
-        </ul>
-        <p>You can disconnect services or remove sources at any time.</p>
-
-        <h2>Data Retention</h2>
-        <ul>
-            <li>Data is retained only while the extension is installed.</li>
-            <li>Uninstalling the extension removes all stored data.</li>
-            <li>You can manually clear data by disconnecting services or removing monitored sites.</li>
+            <li><strong>Temporary Local Storage:</strong> Fetched metadata is kept temporarily in local storage to provide the service.</li>
+            <li><strong>User-Initiated Deletion:</strong> You can wipe all stored data by signing out within the extension or removing a monitored source.</li>
+            <li><strong>Full Removal:</strong> Uninstalling the Catch Up Later extension from Chrome immediately and permanently deletes all locally stored configuration and cached data.</li>
         </ul>
 
         <h2>Your Rights</h2>
-        <p>You have the right to:</p>
-        <ul>
-            <li><strong>Access:</strong> View all stored data in the extension settings.</li>
-            <li><strong>Delete:</strong> Remove any monitored site, RSS feed, or disconnect Google services.</li>
-            <li><strong>Revoke:</strong> Remove Google access at any time via <a href="https://myaccount.google.com/permissions" target="_blank">Google Account Permissions</a>.</li>
-        </ul>
-
-        <h2>Children's Privacy</h2>
-        <p>This extension is not intended for children under 13. We do not knowingly collect information from children.</p>
-
-        <h2>Changes to This Policy</h2>
-        <p>We may update this Privacy Policy from time to time. Changes will be reflected in the "Last Updated" date.</p>
+        <p>You maintain full control over your data. You may revoke access at any time through your <a href="https://myaccount.google.com/permissions" target="_blank">Google Security Settings</a>.</p>
 
         <h2>Contact Us</h2>
-        <p>If you have any questions about this Privacy Policy, please contact us at:</p>
+        <p>For questions regarding this policy or our data protection practices, please contact:</p>
+        <p><strong>Developer:</strong> Woonni (정운)</p>
         <p><strong>Email:</strong> <a href="mailto:woonni10@gmail.com">woonni10@gmail.com</a></p>
-        <h2>Compliance</h2>
-        <ul>
-            <li>Chrome Web Store Developer Program Policies</li>
-            <li>Google API Services User Data Policy</li>
-            <li>General Data Protection Regulation (GDPR) principles</li>
-        </ul>
+
+        <p style="text-align: center; color: #999; margin-top: 50px;">&copy; 2025 Catch Up Later. All rights reserved.</p>
     </div>
 
 </body>
